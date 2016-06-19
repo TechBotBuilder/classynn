@@ -9,13 +9,12 @@ def value_to_color(val, minval = -MAXVAL, maxval = MAXVAL):
     #but that clipping will already be taken care of in Connection class
     if minval is None: minval = -MAXVAL
     if maxval is None: maxval = MAXVAL
-    #color = (1 + val / maxval) / 2 #transform into [0,1]
     color = (val - minval) / (maxval - minval)
     color *= 16**6 #like a html color code
     color = max(0, min(int(color), 16**6-1))
     color = "#{:06x}".format(color)
     return color
-color = value_to_color
+tocolor = value_to_color
 
 
 class GConnection(Connection):
@@ -29,7 +28,7 @@ class GConnection(Connection):
     @value.setter
     def value(self, newvalue):
         self._value = newvalue
-        self.canvas.config(self.id, fill=color(self.value))
+        self.canvas.itemconfig(self.id, fill=tocolor(self.value))
 
 class Graphic:
     def __init__(self, canvas, position):
@@ -47,7 +46,7 @@ class Graphic:
         self.positions['derivative'] = (mp[0]+smallsize, mp[1]+bigsize, mp[0]+smallsize+bigsize, mp[1]+bigsize+smallsize)
         self.positions['outdelta'] = (mp[0]+smallsize+bigsize, mp[1]+bigsize, mp[0]+2*smallsize+bigsize, mp[1]+bigsize+smallsize)
     def gen_graphic(self, position):
-        self.ids = dict([(key, self.canvas.create_rectangle(*self.positions[key], fill='black')) for key in self.positions.keys()])
+        self.ids = dict([(key, self.canvas.create_rectangle(*(self.positions[key]), fill=tocolor(0, 0, 1))) for key in self.positions.keys()])
     @property
     def position(self):
         return self.canvas.bbox(self.ids['activation'])[:2]
@@ -57,7 +56,7 @@ class Graphic:
         for key, item in self.ids:
             self.canvas.coords(item, *self.positions[key])
     def recolor(self, what, value, minval=None, maxval=None):
-        self.canvas.config(self.ids[what], fill=color(value, minval, maxval))
+        self.canvas.itemconfig(self.ids[what], fill=tocolor(value, minval, maxval))
 
 class GUnit(Unit):
     def __init__(self, canvas, position, *args, **kwargs):
