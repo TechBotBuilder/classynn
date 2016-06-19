@@ -1,8 +1,8 @@
 import numpy as np
 from scipy.special import expit as sigmoid
-from sys import argv as runtime_args
 
 class Connection:
+    max_magnitude = 15
     def __init__(self, value=np.random.randn, plasticity=0.001, momentum=0.99, decay=0):
         if hasattr(value, '__call__'):
             self.value = value()
@@ -36,6 +36,7 @@ class Connection:
                 self.value -= self.plasticity * self.delta_accumulator
             self.previous_delta = self.delta_accumulator
             self.delta_accumulator = 0
+            self.value = np.clip(self.value, -self.max_magnitude, self.max_magnitude)
     def commit(self):
         self.update(0)
     def nesterov(self):
@@ -66,9 +67,10 @@ class Unit:
     """
     def __init__(self, outputs, nonlinearity=sigmoid, nonlinearity_deriv=dsigmoid, dropout=0.0, recurrent=False):
         self.outputs = outputs
+        self.dropout = dropout
         self.nonlinearity = nonlinearity
         self.nonlinearity_deriv = nonlinearity_deriv
-        self.dropout = dropout
+        self.frozen = False
         self.logit = 0
         self.frozenlogit = 0
         self.hidden_state = []
@@ -78,9 +80,9 @@ class Unit:
         if self.recurrent:
             self.outputs.append(self)
             self.weights.append(Connection())
-        self.frozen = False
         self.delta = 0.0
         self.output = 0
+        self.outdelta = 0
     
     """Move current output value along weights"""
     def send(self, target=None):
@@ -128,10 +130,11 @@ class Unit:
     
     def backprop(self, commit = True):
         delta = 0
-        stuff= self.hidden_state.pop()
+        stuff = self.hidden_state.pop()
         for output, weight in zip(self.outputs, self.weights):
             delta += weight * output.delta
             weight.update(output.delta * stuff, commit)
+        self.outdelta = delta
         self.delta = delta * self.derivative.pop()
     
     def add_output(self, output, weight=None):
@@ -224,6 +227,9 @@ class OutputGroup(Group):
         for unit, target in zip(self.units, targets):
             cost_val += unit.cost(target)
         return (cost_val / len(self.units))
+
+if __name__ == "__main__":
+    from sys import argv as runtime_args
 
 """if __name__ == "__main__":
     print("Beginning. Enter a nonnumber to quit.")
