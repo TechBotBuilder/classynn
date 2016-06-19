@@ -9,6 +9,10 @@ def value_to_color(val, minval = -MAXVAL, maxval = MAXVAL):
     #but that clipping will already be taken care of in Connection class
     if minval is None: minval = -MAXVAL
     if maxval is None: maxval = MAXVAL
+    ###Need to handle case where val is a list - just use last item in list
+    if hasattr(val, "__iter__"): #acts like a list
+        if val: val = val[-1]
+        else: val = 0
     color = (val - minval) / (maxval - minval)
     color *= 16**6 #like a html color code
     color = max(0, min(int(color), 16**6-1))
@@ -53,7 +57,7 @@ class Graphic:
     @position.setter
     def position(self, newposition):
         self.find_bounds(newposition)
-        for key, item in self.ids:
+        for key, item in self.ids.items():
             self.canvas.coords(item, *self.positions[key])
     def recolor(self, what, value, minval=None, maxval=None):
         self.canvas.itemconfig(self.ids[what], fill=tocolor(value, minval, maxval))
