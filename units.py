@@ -63,9 +63,9 @@ def dsigmoid(x, fromHidden=False):
 class Unit:
     """
     - Unit constructor
-    - Set output units to outputs=[] (empty list) if you like.
     """
-    def __init__(self, outputs, nonlinearity=sigmoid, nonlinearity_deriv=dsigmoid, dropout=0.0, recurrent=False):
+    def __init__(self, outputs=[], nonlinearity=sigmoid, nonlinearity_deriv=dsigmoid, dropout=0.0, recurrent=False):
+        print(type(self).__mro__)
         self.outputs = outputs
         self.dropout = dropout
         self.nonlinearity = nonlinearity
@@ -191,7 +191,7 @@ class Group:
         return result
 
 class InputUnit(Unit):
-    def __init__(self, outputs, *args, **kwargs):
+    def __init__(self, outputs=[], *args, **kwargs):
         super().__init__(outputs, (lambda x: x), (lambda x: 1), *args, **kwargs)
     def update(self, value):
         self.logit = value
@@ -206,7 +206,7 @@ class InputGroup(Group):
             unit.update(value)
 
 class OutputUnit(Unit):
-    def __init__(self, cost_function, cost_derivative, *args, **kwargs):
+    def __init__(self, cost_function=lambda y,t: (y-t)**2, cost_derivative=lambda y,t: y-t, *args, **kwargs):
         super().__init__([], *args, **kwargs)
         self.cost_function = cost_function
         self.cost_derivative = cost_derivative

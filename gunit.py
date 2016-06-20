@@ -1,5 +1,5 @@
 from tkinter import *
-from units import Unit
+from units import Unit, InputUnit, OutputUnit
 from units import Connection
 
 MAXVAL = Connection.max_magnitude
@@ -87,33 +87,50 @@ class GUnit(Unit):
         elif name in ('derivative', 'outdelta'):
             self.graphic.recolor(name, val)
 
-class GInputUnit(InputUnit, GUnit):
+class GInputUnit(GUnit, InputUnit):
     def __init__(self, canvas, position, *args, **kwargs):
-        GUnit.__init__(canvas, position, *args, **kwargs)
-        InputUnit.__init__(*args, **kwargs)
+        GUnit.__init__(self, canvas, position)
+        InputUnit.__init__(self, *args, **kwargs)
 
-class GOutputUnit(OutputUnit, GUnit):
-    def __init__(self, canvas, position, cost_function, cost_derivative, *args, **kwargs):
-        GUnit.__init__(canvas, position, *args, **kwargs)
-        OutputUnit.__init__(cost_function, cost_derivative, *args, **kwargs)
+class GOutputUnit(GUnit, OutputUnit):
+    def __init__(self, canvas, position, *args, **kwargs):
+        GUnit.__init__(self, canvas, position)
+        OutputUnit.__init__(self, *args, **kwargs)
 
-class App(Canvas):
+class OptionsFrame(Frame):
+    def __init__(self, master):
+        super().__init__(master)
+        self.pack()
+        self._unit_type = StringVar()
+        self._unit_type.set('hidden')
+        Radiobutton(self, text='Input Unit', variable=self._unit_type, value='input', indicatoron=0).pack(anchor=W)
+        Radiobutton(self, text='Hidden Unit', variable=self._unit_type, value='hidden', indicatoron=0).pack(anchor=W)
+        Radiobutton(self, text='Output Unit', variable=self._unit_type, value='output', indicatoron=0).pack(anchor=W)
+    @property
+    def unit_type(self):
+        return self._unit_type.get()
+
+class App(Frame):
     def __init__(self, master=None):
         #if master not init'd, will use current root window or create one automatically I think
         super().__init__(master)
         self.pack()
         self.config(cursor='cross')
-        self.type = 'hidden'
-        self.bind("<Button-1>", self.addunit)
+        self.canvas = Canvas(self)
+        self.canvas.pack()
+        self.canvas.bind("<Button-1>", self.addunit)
         self.master.bind("q", lambda e: self.master.destroy())
+        
+        #default internal values
+        self.options = OptionsFrame(self)
     def addunit(self, event):
-        print("Adding {} unit".format(self.type))
-        if self.type == 'hidden':
-            GUnit(self, (event.x, event.y), [])
-        elif self.type == 'input':
-            GInputUnit(self, (event.x, event.y), [])
-        elif self.type == 'output':
-            GOutputUnit(self, (event.x, event.y), lambda y,t: (y-t)**2, lambda y,t: y-t)
+        print("Adding {} unit at {}, {}".format(self.options.unit_type, event.x, event.y))
+        if self.options.unit_type == 'hidden':
+            GUnit(self.canvas, (event.x, event.y), [])
+        elif self.options.unit_type == 'input':
+            GInputUnit(self.canvas, (event.x, event.y), [])
+        elif self.options.unit_type == 'output':
+            GOutputUnit(self.canvas, (event.x, event.y))
 
 
 if __name__ == '__main__':
