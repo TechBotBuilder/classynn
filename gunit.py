@@ -87,6 +87,15 @@ class GUnit(Unit):
         elif name in ('derivative', 'outdelta'):
             self.graphic.recolor(name, val)
 
+class GInputUnit(InputUnit, GUnit):
+    def __init__(self, canvas, position, *args, **kwargs):
+        GUnit.__init__(canvas, position, *args, **kwargs)
+        InputUnit.__init__(*args, **kwargs)
+
+class GOutputUnit(OutputUnit, GUnit):
+    def __init__(self, canvas, position, cost_function, cost_derivative, *args, **kwargs):
+        GUnit.__init__(canvas, position, *args, **kwargs)
+        OutputUnit.__init__(cost_function, cost_derivative, *args, **kwargs)
 
 class App(Canvas):
     def __init__(self, master=None):
@@ -94,11 +103,17 @@ class App(Canvas):
         super().__init__(master)
         self.pack()
         self.config(cursor='cross')
+        self.type = 'hidden'
         self.bind("<Button-1>", self.addunit)
         self.master.bind("q", lambda e: self.master.destroy())
     def addunit(self, event):
-        print("HE")
-        GUnit(self, (event.x, event.y), [])
+        print("Adding {} unit".format(self.type))
+        if self.type == 'hidden':
+            GUnit(self, (event.x, event.y), [])
+        elif self.type == 'input':
+            GInputUnit(self, (event.x, event.y), [])
+        elif self.type == 'output':
+            GOutputUnit(self, (event.x, event.y), lambda y,t: (y-t)**2, lambda y,t: y-t)
 
 
 if __name__ == '__main__':

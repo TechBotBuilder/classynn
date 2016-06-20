@@ -191,8 +191,8 @@ class Group:
         return result
 
 class InputUnit(Unit):
-    def __init__(self, outputs, dropout=0):
-        super().__init__(outputs, (lambda x: x), (lambda x: 1), dropout)
+    def __init__(self, outputs, *args, **kwargs):
+        super().__init__(outputs, (lambda x: x), (lambda x: 1), *args, **kwargs)
     def update(self, value):
         self.logit = value
 
@@ -206,8 +206,8 @@ class InputGroup(Group):
             unit.update(value)
 
 class OutputUnit(Unit):
-    def __init__(self, nonlinearity, nonlinearity_deriv, cost_function, cost_derivative, dropout=0):
-        super().__init__([], nonlinearity, nonlinearity_deriv, dropout)
+    def __init__(self, cost_function, cost_derivative, *args, **kwargs):
+        super().__init__([], *args, **kwargs)
         self.cost_function = cost_function
         self.cost_derivative = cost_derivative
     def cost(self, target):
