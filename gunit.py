@@ -23,9 +23,10 @@ tocolor = value_to_color
 
 class GConnection(Connection):
     def __init__(self, canvas, startpos, endpos, *args, **kwargs):
-        super().__init__(*args, **kwargs)
+        print("Adding connection from {} to {}.".format(startpos, endpos))
         self.canvas = canvas
-        self.id = self.canvas.create_line(*startpos, *endpos, fill='black')
+        self.id = self.canvas.create_line(*startpos, *endpos, fill='black', width=4)
+        super().__init__(*args, **kwargs)
     @property
     def value(self):
         return super().value
@@ -66,6 +67,7 @@ class Graphic:
 
 class GUnit(Unit):
     def __init__(self, canvas, position, *args, **kwargs):
+        print("Adding {} unit at {}, {}".format(str(type(self)), *position))
         self.canvas = canvas
         self.graphic = Graphic(self, canvas, position)
         super().__init__(*args, **kwargs)
@@ -126,11 +128,15 @@ class App(Frame):
         #default internal values
         self.options = OptionsFrame(self)
         self.startunit = None
-    def addunit(self, event): #fires when we click on an empty area of the canvas
-        if self.startunit:
-            self.startunit = None #reset our selection
+        self.clicked_on_a_unit = False #See http://stackoverflow.com/a/14480311 - both canvas and unit callbacks were firing
+    def addunit(self, event): #fires when we click on any area of the canvas
+        if self.clicked_on_a_unit:
+            self.clicked_on_a_unit = False
+            return #get out of here if we have clicked inside a unit
+        if self.startunit: #we're not trying to add a connection
+            #the above test wasn't called, but we still have a unit ready to be added
+            self.startunit = None #reset our selection if we click on an empty area of the canvas
         else:
-            print("Adding {} unit at {}, {}".format(self.options.unit_type, event.x, event.y))
             if self.options.unit_type == 'hidden':
                 GUnit(self.canvas, (event.x, event.y), [])
             elif self.options.unit_type == 'input':
@@ -138,17 +144,18 @@ class App(Frame):
             elif self.options.unit_type == 'output':
                 GOutputUnit(self.canvas, (event.x, event.y))
     def addconnection(self, unit): #creates a method bound to each specific unit
-        return lambda e: self._addconnection(unit, e)
+        return lambda event: self._addconnection(unit, event)
     def _addconnection(self, targetunit, event): #fires when we click on a unit on the canvas
-        if self.startunit:
+        self.clicked_on_a_unit = True
+        if self.startunit: #we already have a unit to start with
             self.startunit.add_output(targetunit, GConnection(self.canvas, self.startunit.position, targetunit.position))
             self.startunit = None
-        else:
+        else: #we don't have a unit to start with, so set this as the starting unit.
             self.startunit = targetunit
 
 
 if __name__ == '__main__':
-    print("HI")
+    print("Starting simulation...")
     root = Tk()
     root.title("Neural Network Simulation")
     app = App(root)
