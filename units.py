@@ -79,7 +79,7 @@ class Unit:
         if self.recurrent:
             self.outputs.append(self)
             self.weights.append(Connection())
-        self.delta = 0.0
+        self.delta = 0
         self.output = 0
         self.outdelta = 0
     
@@ -211,9 +211,15 @@ class OutputUnit(Unit):
         self.cost_derivative = cost_derivative
     def cost(self, target):
         output = self.hidden_state.pop()
+        internal_deriv = self.derivative.pop()
+        if self.outputs:
+            #re-add internal hidden state and derivative because backprop re-removes them
+            self.hidden_state.append(output)
+            self.derivative.append(internal_deriv)
+            self.backprop()
         cost_val = self.cost_function(output, target)
         dcost = self.cost_derivative(output, target)
-        self.delta = dcost * self.derivative.pop()
+        self.delta = dcost * internal_deriv
         return cost_val
 
 class OutputGroup(Group):
