@@ -26,6 +26,7 @@ class GConnection(Connection):
         print("Adding connection from {} to {}.".format(startpos, endpos))
         self.canvas = canvas
         self.id = self.canvas.create_line(*startpos, *endpos, fill='black', width=4)
+        self.canvas.tag_bind(self.id, "<Button-1>", self.canvas.master.configconnection(self))
         super().__init__(*args, **kwargs)
     @property
     def value(self):
@@ -104,7 +105,7 @@ class GOutputUnit(GUnit, OutputUnit):
 class OptionsFrame(Frame):
     def __init__(self, master):
         super().__init__(master)
-        self.pack()
+        self.pack(anchor=SW)
         self._unit_type = StringVar()
         self._unit_type.set('hidden')
         Radiobutton(self, text='Input Unit', variable=self._unit_type, value='input', indicatoron=0).pack(anchor=W)
@@ -114,6 +115,57 @@ class OptionsFrame(Frame):
     def unit_type(self):
         return self._unit_type.get()
 
+"""
+What is needed?
+position config
+value config
+nonlinearity
+
+"""
+class UnitConfigFrame(Frame):
+    def __init__(self, master):
+        super().__init__(master)
+        self.pack(anchor=SE)
+    def show_unit(self, unit):
+        print("Show unit")
+
+#the menu mainly is used to change configurations
+#and doesn't have to worry about them changing without it knowing.
+#Except for value, moment, delta_accumulator, and previous_delta
+class ConnectionConfigFrame(Frame):
+    def __init__(self, master):
+        super().__init__(master)
+        self.pack(anchor=SE)
+        self.con = None
+        typeaparts = ['value', 'moment', 'delta_accumulator', 'previous_delta']
+        typebparts = ['plasticity', 'momentum', 'decay']
+        self.parts = {}
+        for part in typeaparts:
+            self.parts[part] = Scale(master=self, from_=-MAXVAL, to=MAXVAL)
+        for part in typebparts:
+            self.parts[part] = Scale(master=self, from_=0, to=1)
+        for part in self.parts:
+            print(part)
+            self.parts[part].config(resolution=-1, label=part, orient=HORIZONTAL, command=self.updateconnection(part))
+            self.parts[part].pack()
+    def show_connection(self, con):
+        self.con = con
+        for part in self.parts:
+            self.parts[part].set(self.con.__getattribute__(part))
+    def updateconnection(self, name):
+        return lambda value: self._updateconnection(name, value)
+    def _updateconnection(self, name, value):
+        if self.con:
+            setattr(self.con, name, float(value))
+            #print("Set {} to {}".format(name, float(value)))
+
+"""
+need button to start/stop forward/backward
+need slider to change speed of forward/backward
+"""
+class RunFrame(Frame):
+    pass
+
 class App(Frame):
     def __init__(self, master=None):
         #if master not init'd, will use current root window or create one automatically I think
@@ -121,18 +173,24 @@ class App(Frame):
         self.pack()
         self.config(cursor='cross')
         self.canvas = Canvas(self)
-        self.canvas.pack()
+        self.canvas.pack(anchor=N)
         self.canvas.bind("<Button-1>", self.addunit)
         self.master.bind("q", lambda e: self.master.destroy())
         
         #default internal values
         self.options = OptionsFrame(self)
+        self.connectionconfig = ConnectionConfigFrame(self)
+        self.unitconfig = UnitConfigFrame(self)
         self.startunit = None
         self.clicked_on_a_unit = False #See http://stackoverflow.com/a/14480311 - both canvas and unit callbacks were firing
+        self.clicked_on_a_connection = False
     def addunit(self, event): #fires when we click on any area of the canvas
         if self.clicked_on_a_unit:
             self.clicked_on_a_unit = False
             return #get out of here if we have clicked inside a unit
+        if self.clicked_on_a_connection:
+            self.clicked_on_a_connection = False
+            return
         if self.startunit: #we're not trying to add a connection
             #the above test wasn't called, but we still have a unit ready to be added
             self.startunit = None #reset our selection if we click on an empty area of the canvas
@@ -146,12 +204,21 @@ class App(Frame):
     def addconnection(self, unit): #creates a method bound to each specific unit
         return lambda event: self._addconnection(unit, event)
     def _addconnection(self, targetunit, event): #fires when we click on a unit on the canvas
+        if self.clicked_on_a_connection:
+            return
         self.clicked_on_a_unit = True
+        self.unitconfig.show_unit(targetunit)
         if self.startunit: #we already have a unit to start with
             self.startunit.add_output(targetunit, GConnection(self.canvas, self.startunit.position, targetunit.position))
             self.startunit = None
         else: #we don't have a unit to start with, so set this as the starting unit.
             self.startunit = targetunit
+    def configconnection(self, connection):
+        return lambda event: self._configconnection(connection, event)
+    def _configconnection(self, connection, event):
+        self.clicked_on_a_connection = True
+        self.connectionconfig.show_connection(connection)
+        
 
 
 if __name__ == '__main__':

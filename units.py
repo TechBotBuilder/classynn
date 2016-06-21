@@ -2,8 +2,8 @@ import numpy as np
 from scipy.special import expit as sigmoid
 
 class Connection:
-    max_magnitude = 15
-    def __init__(self, value=np.random.randn, plasticity=0.001, momentum=0.99, decay=0):
+    max_magnitude = 10
+    def __init__(self, value=np.random.randn, plasticity=0.001, momentum=0.6, decay=0):
         if hasattr(value, '__call__'):
             self.value = value()
         else:
