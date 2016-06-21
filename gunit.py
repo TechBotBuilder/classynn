@@ -35,11 +35,13 @@ class GConnection(Connection):
         self.canvas.itemconfig(self.id, fill=tocolor(self.value))
 
 class Graphic:
-    def __init__(self, canvas, position):
+    def __init__(self, unit, canvas, position):
         self.canvas = canvas
         self.positions = {}
         self.find_bounds(position)
         self.gen_graphic(position)
+        for piece in self.ids:
+            self.canvas.tag_bind(self.ids[piece], "<Button-1>", self.canvas.master.addconnection(unit))
     def find_bounds(self, mainposition):
         mp = mainposition
         bigsize = 10
@@ -65,7 +67,7 @@ class Graphic:
 class GUnit(Unit):
     def __init__(self, canvas, position, *args, **kwargs):
         self.canvas = canvas
-        self.graphic = Graphic(canvas, position)
+        self.graphic = Graphic(self, canvas, position)
         super().__init__(*args, **kwargs)
         self.position = position
         self.weights = [GConnection() for weight in self.weights]
@@ -123,14 +125,26 @@ class App(Frame):
         
         #default internal values
         self.options = OptionsFrame(self)
-    def addunit(self, event):
-        print("Adding {} unit at {}, {}".format(self.options.unit_type, event.x, event.y))
-        if self.options.unit_type == 'hidden':
-            GUnit(self.canvas, (event.x, event.y), [])
-        elif self.options.unit_type == 'input':
-            GInputUnit(self.canvas, (event.x, event.y), [])
-        elif self.options.unit_type == 'output':
-            GOutputUnit(self.canvas, (event.x, event.y))
+        self.startunit = None
+    def addunit(self, event): #fires when we click on an empty area of the canvas
+        if self.startunit:
+            self.startunit = None #reset our selection
+        else:
+            print("Adding {} unit at {}, {}".format(self.options.unit_type, event.x, event.y))
+            if self.options.unit_type == 'hidden':
+                GUnit(self.canvas, (event.x, event.y), [])
+            elif self.options.unit_type == 'input':
+                GInputUnit(self.canvas, (event.x, event.y), [])
+            elif self.options.unit_type == 'output':
+                GOutputUnit(self.canvas, (event.x, event.y))
+    def addconnection(self, unit): #creates a method bound to each specific unit
+        return lambda e: self._addconnection(unit, e)
+    def _addconnection(self, targetunit, event): #fires when we click on a unit on the canvas
+        if self.startunit:
+            self.startunit.add_output(targetunit, GConnection(self.canvas, self.startunit.position, targetunit.position))
+            self.startunit = None
+        else:
+            self.startunit = targetunit
 
 
 if __name__ == '__main__':

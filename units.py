@@ -65,7 +65,6 @@ class Unit:
     - Unit constructor
     """
     def __init__(self, outputs=[], nonlinearity=sigmoid, nonlinearity_deriv=dsigmoid, dropout=0.0, recurrent=False):
-        print(type(self).__mro__)
         self.outputs = outputs
         self.dropout = dropout
         self.nonlinearity = nonlinearity
