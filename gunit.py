@@ -45,10 +45,10 @@ class Graphic:
             self.canvas.tag_bind(self.ids[piece], "<Button-1>", self.canvas.master.addconnection(unit))
     def find_bounds(self, mainposition):
         mp = mainposition
-        bigsize = 10
-        smallsize = 5
+        bigsize = 20
+        smallsize = 10
         self.positions['logit'] = (*mp, mp[0]+smallsize, mp[1]+bigsize)
-        self.positions['activation'] = (*mp, mp[0]+bigsize+2*smallsize, mp[1]+bigsize+smallsize)
+        self.positions['activation'] = (mp[0]+smallsize, mp[1], mp[0]+bigsize+2*smallsize, mp[1]+bigsize+smallsize)
         self.positions['indelta'] = (mp[0], mp[1]+bigsize, mp[0]+smallsize, mp[1]+bigsize+smallsize)
         self.positions['derivative'] = (mp[0]+smallsize, mp[1]+bigsize, mp[0]+smallsize+bigsize, mp[1]+bigsize+smallsize)
         self.positions['outdelta'] = (mp[0]+smallsize+bigsize, mp[1]+bigsize, mp[0]+2*smallsize+bigsize, mp[1]+bigsize+smallsize)
