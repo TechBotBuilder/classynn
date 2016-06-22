@@ -23,18 +23,10 @@ possible_nonlinearities = {'sigmoid': (sigmoid, dsigmoid), 'tanh': (tanh, dtanh)
     'linear': (linear, dlinear), 'rectified_linear': (rectified_linear, drectified_linear)}
 
 
-#help from http://stackoverflow.com/a/24943263
-def edit_frame(frame, option, value):
-    for child in frame.winfo_children():
-        if 'class' in child.config() and child['class'] == 'Frame':
-            edit_frame(child, option, value)
-        else:
-            child[option]=value
-
 def disable_frame(frame):
-    edit_frame(frame, 'state', 'disabled')
+    frame.pack_forget()
 def enable_frame(frame):
-    edit_frame(frame, 'state', 'normal')
+    frame.pack()
 
 def take_care_of_lists(value):
     if hasattr(value, "__iter__"): #acts like a list
@@ -332,14 +324,16 @@ class App(Frame):
         self.canvas.bind("<Button-1>", self.addunit)
         self.master.bind("q", lambda e: self.master.destroy())
         
-        self.configbar = Frame(master=self)
+        self.configbar = Frame(master=self, height=300)
         self.configbar.pack(side=TOP, fill=X)
         
         self.options = OptionsFrame(self.configbar)
         
         self.connectionconfig = ConnectionConfigFrame(self.configbar)
+        disable_frame(self.connectionconfig)
         
         self.unitconfig = UnitConfigFrame(self.configbar)
+        disable_frame(self.unitconfig)
         
         self.message = StringVar()
         Label(master=self, height=0, justify=LEFT, anchor=W, textvariable=self.message, bg='gray').pack(side=BOTTOM, fill=X)
@@ -358,11 +352,10 @@ class App(Frame):
             self.unitconfig.clear()
             self.clicked_on_a_connection = False
             return
-        if self.startunit: #we're not trying to add a connection
-            #the above test wasn't called, but we still have a unit ready to have an output added to
-            self.connectionconfig.clear()
+        #If we get to this point, we should reset our selection because we clicked on an empty area of the canvas
+        if self.startunit:
             self.unitconfig.clear()
-            self.startunit = None #reset our selection if we click on an empty area of the canvas
+            self.startunit = None
         elif self.connectionconfig.watched_item:
             self.connectionconfig.clear()
         else:
@@ -386,6 +379,7 @@ class App(Frame):
     def configconnection(self, connection):
         return lambda event: self._configconnection(connection, event)
     def _configconnection(self, connection, event):
+        self.startunit = None #cancel any ideas we had before about linking units
         self.clicked_on_a_connection = True
         self.connectionconfig.show(connection)
 
