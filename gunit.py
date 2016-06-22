@@ -4,10 +4,31 @@ from units import Connection
 
 MAXVAL = Connection.max_magnitude
 
+#predefine some nonlinearities for people to use:
+#remember derivatives are based on outputs - so y=sigmoid(x) -> dy/dx = y*(1-y)
+from math import exp
+def sigmoid(x): return 1/(1+exp(-x))
+def dsigmoid(y): return y*(1-y)
+
+from math import tanh
+def dtanh(y): return 1 - y**2
+
+def linear(x): return x
+def dlinear(y): return 1
+
+def rectified_linear(x): return max(0, x)
+def drectified_linear(y): return int(y != 0)
+
+possible_nonlinearities = {'sigmoid': (sigmoid, dsigmoid), 'tanh': (tanh, dtanh),
+    'linear': (linear, dlinear), 'rectified_linear': (rectified_linear, drectified_linear)}
+
+
 def take_care_of_lists(value):
     if hasattr(value, "__iter__"): #acts like a list
         if value: value = value[-1]
         else: value = 0
+    elif hasattr(value, '__call__'):
+        value = value.__name__
     return value
 
 def value_to_color(val, minval=-MAXVAL, maxval=MAXVAL):
@@ -35,17 +56,40 @@ class Watchable:
     watcher = None
     def __setattr__(self, name, value):
         super().__setattr__(name, value)
+        if name == 'watcher':
+            if value is None:
+                self.dehighlight()
+            else:
+                self.highlight()
         if self.watcher and name in self.watcher.parts: #if we're being watched
-            if self.watcher.parts[name].get() != value:#if it doesn't already know what's happening
-                self.watcher.parts[name].set(value)#let the watcher know what's happening
+            if name in ('nonlinearity', 'nonlinearity_deriv'):
+                if self.watcher.parts[name].get() != value.__name__:
+                    self.watcher.parts[name].set(value.__name__)
+            else:
+                if self.watcher.parts[name].get() != value:#if it doesn't already know what's happening
+                    self.watcher.parts[name].set(value)#let the watcher know what's happening
+    def highlight(self):
+        for part in self.graphic.ids:
+            self.canvas.itemconfig(self.graphic.ids[part], outline='yellow')
+    def dehighlight(self):
+        for part in self.graphic.ids:
+            self.canvas.itemconfig(self.graphic.ids[part], outline='black')
+
+class ConnectionGraphic:
+    def __init__(self, con, canvas, startpos, endpos):
+        self.canvas = canvas
+        self.ids = {'value': self.canvas.create_line(*startpos, *endpos, fill='black', width=4)}
+        for part in self.ids:
+            self.canvas.tag_bind(self.ids[part], "<Button-1>", self.canvas.master.configconnection(self))
+    def recolor(self, what, value, minval=None, maxval=None):
+        self.canvas.itemconfig(self.ids[what], fill=tocolor(value, minval, maxval))
 
 class GConnection(Connection, Watchable):
     def __init__(self, canvas, startpos, endpos, *args, **kwargs):
         self.watcher = None
         print("Adding connection from {} to {}.".format(startpos, endpos))
+        self.graphic = ConnectionGraphic(self, canvas, startpos, endpos)
         self.canvas = canvas
-        self.id = self.canvas.create_line(*startpos, *endpos, fill='black', width=4)
-        self.canvas.tag_bind(self.id, "<Button-1>", self.canvas.master.configconnection(self))
         super().__init__(*args, **kwargs)
     @property
     def value(self):
@@ -53,9 +97,9 @@ class GConnection(Connection, Watchable):
     @value.setter
     def value(self, newvalue):
         self._value = newvalue
-        self.canvas.itemconfig(self.id, fill=tocolor(self.value))
+        self.graphic.recolor('value', self.value)
 
-class Graphic:
+class UnitGraphic:
     def __init__(self, unit, canvas, position):
         self.canvas = canvas
         self.positions = {}
@@ -89,7 +133,7 @@ class GUnit(Unit, Watchable):
     def __init__(self, canvas, position, *args, **kwargs):
         print("Adding {} unit at {}, {}".format(str(type(self)), *position))
         self.canvas = canvas
-        self.graphic = Graphic(self, canvas, position)
+        self.graphic = UnitGraphic(self, canvas, position)
         super().__init__(*args, **kwargs)
         self.position = position
         self.weights = [GConnection() for weight in self.weights]
@@ -146,32 +190,71 @@ class Watcher:
         for part in self.parts:
             self.parts[part].set(take_care_of_lists(self.watched_item.__getattribute__(part))) #load in this item's settings
     def update_display(self, name):
-        return lambda value: self._update_display(name, value)
+        def f(*args):
+            if len(args) == 0:
+                val = self.parts[name].get() #in case command callback doesn't give us any new value info
+            else: val = args[0]
+            self._update_display(name, val)
+            if name == 'frozen': #(un)freezing changes which should be displayed;
+                #updating both lets them figure out who it should be
+                self.update_display('logit')()
+                self.update_display('frozenlogit')()
+        return f
     def _update_display(self, name, value):
         if self.watched_item:
-            setattr(self.watched_item, name, float(value))
+            if name == 'nonlinearity':
+                setattr(self.watched_item, name, possible_nonlinearities[value][0])
+                setattr(self.watched_item, 'nonlinearity_deriv', possible_nonlinearities[value][1])
+            else: setattr(self.watched_item, name, float(value))
 
-"""
-What is needed?
-position config
-value config
-nonlinearity
-"""
+class Checkerybutton(Checkbutton):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.variable = kwargs['variable']
+    def get(self):
+        return self.variable.get()
+    def set(self, newval):
+        self.variable.set(newval)
+
 class UnitConfigFrame(Frame, Watcher):
     def __init__(self, master):
         super().__init__(master)
         self.pack(side=LEFT, fill=X, expand=True)
         self.parts = {}
-        numberparts = ['logit', 'frozenlogit', 'delta', 'output', 'outdelta', 'derivative']
-        arrayparts = ['nonlinearity', 'hidden_state']
+        numberparts = ['logit', 'frozenlogit', 'delta', 'output', 'outdelta', 'derivative']#, 'hidden_state']
         booleanparts = ['frozen', 'recurrent']
         self.parts['dropout'] = Scale(master=self, from_=0, to=1)
         for part in numberparts:
             self.parts[part] = Scale(master=self, from_=-MAXVAL, to=MAXVAL)
+        for part in self.parts: self.parts[part].config(resolution=-1, label=part, orient=HORIZONTAL, digits=4)
+        for part in booleanparts:
+            self.parts[part] = Checkerybutton(master=self, text=part, variable=IntVar())
+        self.functions_holder = Frame(self)
+        nonlin_selected = StringVar()
+        for nl in possible_nonlinearities:
+            Radiobutton(self.functions_holder, text=nl, variable=nonlin_selected, value=nl, command=self.update_display('nonlinearity')).pack()
+        for part in self.parts:
+            self.parts[part].config(command=self.update_display(part))
+        
+        self.parts['nonlinearity'] = nonlin_selected
+        
+        #Label(self, textvariable=self.parts['nonlinearity']).grid()
+        self.parts['dropout'].grid(row=0)
+        self.parts['frozen'].grid(row=1)
+        self.parts['recurrent'].grid(row=2)
+        
+        self.functions_holder.grid(column=1, row=0, rowspan=3)
+        
+        self.parts['logit'].grid(column=2, row=0)
+        self.parts['frozenlogit'].grid(column=2, row=1)
+        #self.parts['hidden_state'].grid(column=2, row=2)
+        self.parts['output'].grid(column=2, row=2)
+        
+        self.parts['delta'].grid(column=3, row=0)
+        self.parts['derivative'].grid(column=3, row=1)
+        self.parts['outdelta'].grid(column=3, row=2)
+        
 
-#the menu mainly is used to change configurations
-#and doesn't have to worry about them changing without it knowing.
-#Except for value, moment, delta_accumulator, and previous_delta
 class ConnectionConfigFrame(Frame, Watcher):
     def __init__(self, master):
         super().__init__(master, width=1)
@@ -185,13 +268,13 @@ class ConnectionConfigFrame(Frame, Watcher):
             self.parts[part] = Scale(master=self, from_=0, to=1)
         for part in self.parts:
             self.parts[part].config(resolution=-1, label=part, orient=HORIZONTAL, digits=4, command=self.update_display(part))
-        self.parts['value'].grid(row=0)
-        self.parts['plasticity'].grid(row=0, column=1)
-        self.parts['momentum'].grid(row=0, column=2)
-        self.parts['decay'].grid(row=0, column=3)
-        self.parts['moment'].grid(row=1)
-        self.parts['delta_accumulator'].grid(row=1, column=1)
-        self.parts['previous_delta'].grid(row=1, column=2)
+        self.parts['value'].grid(row=0, columnspan=2)
+        self.parts['plasticity'].grid(row=1)
+        self.parts['momentum'].grid(row=2)
+        self.parts['decay'].grid(row=3)
+        self.parts['moment'].grid(row=1, column=1)
+        self.parts['delta_accumulator'].grid(row=2, column=1)
+        self.parts['previous_delta'].grid(row=3, column=1)
 
 
 """
@@ -205,7 +288,7 @@ class App(Frame):
     def __init__(self, master=None):
         #if master not init'd, will use current root window or create one automatically I think
         super().__init__(master)
-        self.master.minsize(height=400, width=600)
+        self.master.minsize(height=600, width=1000)
         self.master.title("Neural Network Simulation")
         self.pack(fill=BOTH, expand=True)
         
@@ -217,11 +300,18 @@ class App(Frame):
         self.canvas.bind("<Button-1>", self.addunit)
         self.master.bind("q", lambda e: self.master.destroy())
         
-        self.options = OptionsFrame(self)
+        self.configbar = Frame(master=self)
+        self.configbar.pack(side=TOP, fill=X)
         
-        self.connectionconfig = ConnectionConfigFrame(self)
+        self.options = OptionsFrame(self.configbar)
         
-        self.unitconfig = UnitConfigFrame(self)
+        self.connectionconfig = ConnectionConfigFrame(self.configbar)
+        
+        self.unitconfig = UnitConfigFrame(self.configbar)
+        
+        self.message = StringVar()
+        Label(master=self, height=0, justify=LEFT, anchor=W, textvariable=self.message, bg='gray').pack(side=BOTTOM, fill=X)
+        self.message.set("Starting...")
         
         #default internal values
         self.startunit = None

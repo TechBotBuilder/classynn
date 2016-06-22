@@ -1,5 +1,10 @@
 import numpy as np
-from scipy.special import expit as sigmoid
+#from scipy.special import expit as sigmoid
+from math import exp
+def sigmoid(x): return 1/(1+exp(-x))
+
+def linear(x): return x
+def dlinear(y): return 1
 
 class Connection:
     max_magnitude = 10
@@ -55,8 +60,8 @@ class Connection:
     def value(self, newvalue):
         self._value = newvalue
 
-def dsigmoid(x, fromHidden=False):
-    if fromHidden:
+def dsigmoid(x, fromLogit=False):
+    if fromLogit:
         x = sigmoid(x)
     return x * (1.0-x)
 
@@ -191,7 +196,7 @@ class Group:
 
 class InputUnit(Unit):
     def __init__(self, outputs=[], *args, **kwargs):
-        super().__init__(outputs, (lambda x: x), (lambda x: 1), *args, **kwargs)
+        super().__init__(outputs, linear, dlinear, *args, **kwargs)
     def update(self, value):
         self.logit = value
 
