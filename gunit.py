@@ -359,10 +359,12 @@ class App(Frame):
             self.clicked_on_a_connection = False
             return
         if self.startunit: #we're not trying to add a connection
-            #the above test wasn't called, but we still have a unit ready to be added
+            #the above test wasn't called, but we still have a unit ready to have an output added to
             self.connectionconfig.clear()
             self.unitconfig.clear()
             self.startunit = None #reset our selection if we click on an empty area of the canvas
+        elif self.connectionconfig.watched_item:
+            self.connectionconfig.clear()
         else:
             if self.options.unit_type == 'hidden':
                 GUnit(self.canvas, (event.x, event.y), [])
