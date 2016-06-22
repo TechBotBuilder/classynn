@@ -23,6 +23,19 @@ possible_nonlinearities = {'sigmoid': (sigmoid, dsigmoid), 'tanh': (tanh, dtanh)
     'linear': (linear, dlinear), 'rectified_linear': (rectified_linear, drectified_linear)}
 
 
+#help from http://stackoverflow.com/a/24943263
+def edit_frame(frame, option, value):
+    for child in frame.winfo_children():
+        if 'class' in child.config() and child['class'] == 'Frame':
+            edit_frame(child, option, value)
+        else:
+            child[option]=value
+
+def disable_frame(frame):
+    edit_frame(frame, 'state', 'disabled')
+def enable_frame(frame):
+    edit_frame(frame, 'state', 'normal')
+
 def take_care_of_lists(value):
     if hasattr(value, "__iter__"): #acts like a list
         if value: value = value[-1]
@@ -53,15 +66,17 @@ def value_to_color(val, minval=-MAXVAL, maxval=MAXVAL):
 tocolor = value_to_color
 
 class Watchable:
-    watcher = None
     def __setattr__(self, name, value):
+        if not 'watcher' in self.__dict__:
+            super().__setattr__('watcher', None)
         super().__setattr__(name, value)
         if name == 'watcher':
-            if value is None:
-                self.dehighlight()
-            else:
-                self.highlight()
-        if self.watcher and name in self.watcher.parts: #if we're being watched
+            if 'graphic' in self.__dict__:
+                if value is None:
+                    self.dehighlight()
+                else:
+                    self.highlight()
+        elif self.watcher and name in self.watcher.parts: #if we're being watched
             if name in ('nonlinearity', 'nonlinearity_deriv'):
                 if self.watcher.parts[name].get() != value.__name__:
                     self.watcher.parts[name].set(value.__name__)
@@ -69,18 +84,17 @@ class Watchable:
                 if self.watcher.parts[name].get() != value:#if it doesn't already know what's happening
                     self.watcher.parts[name].set(value)#let the watcher know what's happening
     def highlight(self):
-        for part in self.graphic.ids:
-            self.canvas.itemconfig(self.graphic.ids[part], outline='yellow')
+        pass
     def dehighlight(self):
-        for part in self.graphic.ids:
-            self.canvas.itemconfig(self.graphic.ids[part], outline='black')
+        pass
 
 class ConnectionGraphic:
     def __init__(self, con, canvas, startpos, endpos):
+        self.con = con
         self.canvas = canvas
         self.ids = {'value': self.canvas.create_line(*startpos, *endpos, fill='black', width=4)}
         for part in self.ids:
-            self.canvas.tag_bind(self.ids[part], "<Button-1>", self.canvas.master.configconnection(self))
+            self.canvas.tag_bind(self.ids[part], "<Button-1>", self.canvas.master.configconnection(self.con))
     def recolor(self, what, value, minval=None, maxval=None):
         self.canvas.itemconfig(self.ids[what], fill=tocolor(value, minval, maxval))
 
@@ -98,6 +112,12 @@ class GConnection(Connection, Watchable):
     def value(self, newvalue):
         self._value = newvalue
         self.graphic.recolor('value', self.value)
+    def highlight(self):
+        for part in self.graphic.ids:
+            self.canvas.itemconfig(self.graphic.ids[part], width=8)
+    def dehighlight(self):
+        for part in self.graphic.ids:
+            self.canvas.itemconfig(self.graphic.ids[part], width=4)
 
 class UnitGraphic:
     def __init__(self, unit, canvas, position):
@@ -154,6 +174,12 @@ class GUnit(Unit, Watchable):
             self.graphic.recolor('indelta', self.delta)
         elif name in ('derivative', 'outdelta'):
             self.graphic.recolor(name, val)
+    def highlight(self):
+        for part in self.graphic.ids:
+            self.canvas.itemconfig(self.graphic.ids[part], outline='yellow')
+    def dehighlight(self):
+        for part in self.graphic.ids:
+            self.canvas.itemconfig(self.graphic.ids[part], outline='black')
 
 class GInputUnit(GUnit, InputUnit):
     def __init__(self, canvas, position, *args, **kwargs):
@@ -179,14 +205,13 @@ class OptionsFrame(Frame):
         return self._unit_type.get()
 
 class Watcher:
-    watched_item = None
     def __init__(self):
-        self.parts = {}
+        self.watched_item = None
     def show(self, newWatched):
-        if self.watched_item:
-            self.watched_item.watcher = None #tell previous item that it is no longer being watched
+        self.clear()
         self.watched_item = newWatched
         self.watched_item.watcher = self #tell new watched item that it is being watched
+        enable_frame(self)
         for part in self.parts:
             self.parts[part].set(take_care_of_lists(self.watched_item.__getattribute__(part))) #load in this item's settings
     def update_display(self, name):
@@ -206,6 +231,11 @@ class Watcher:
                 setattr(self.watched_item, name, possible_nonlinearities[value][0])
                 setattr(self.watched_item, 'nonlinearity_deriv', possible_nonlinearities[value][1])
             else: setattr(self.watched_item, name, float(value))
+    def clear(self):
+        if self.watched_item:
+            self.watched_item.watcher = None #tell previous item that it is no longer being watched
+            self.watched_item = None
+        disable_frame(self)
 
 class Checkerybutton(Checkbutton):
     def __init__(self, *args, **kwargs):
@@ -218,6 +248,7 @@ class Checkerybutton(Checkbutton):
 
 class UnitConfigFrame(Frame, Watcher):
     def __init__(self, master):
+        Watcher.__init__(self)
         super().__init__(master)
         self.pack(side=LEFT, fill=X, expand=True)
         self.parts = {}
@@ -257,6 +288,7 @@ class UnitConfigFrame(Frame, Watcher):
 
 class ConnectionConfigFrame(Frame, Watcher):
     def __init__(self, master):
+        Watcher.__init__(self)
         super().__init__(master, width=1)
         self.pack(side=LEFT, fill=X, expand=True)
         typeaparts = ['value', 'moment', 'delta_accumulator', 'previous_delta']
@@ -319,13 +351,17 @@ class App(Frame):
         self.clicked_on_a_connection = False
     def addunit(self, event): #fires when we click on any area of the canvas
         if self.clicked_on_a_unit:
+            self.connectionconfig.clear()
             self.clicked_on_a_unit = False
             return #get out of here if we have clicked inside a unit
         if self.clicked_on_a_connection:
+            self.unitconfig.clear()
             self.clicked_on_a_connection = False
             return
         if self.startunit: #we're not trying to add a connection
             #the above test wasn't called, but we still have a unit ready to be added
+            self.connectionconfig.clear()
+            self.unitconfig.clear()
             self.startunit = None #reset our selection if we click on an empty area of the canvas
         else:
             if self.options.unit_type == 'hidden':
@@ -344,8 +380,7 @@ class App(Frame):
         if self.startunit: #we already have a unit to start with
             self.startunit.add_output(targetunit, GConnection(self.canvas, self.startunit.position, targetunit.position))
             self.startunit = None
-        else: #we don't have a unit to start with, so set this as the starting unit.
-            self.startunit = targetunit
+        self.startunit = targetunit
     def configconnection(self, connection):
         return lambda event: self._configconnection(connection, event)
     def _configconnection(self, connection, event):
