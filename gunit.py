@@ -89,6 +89,9 @@ class ConnectionGraphic:
             self.canvas.tag_bind(self.ids[part], "<Button-1>", self.canvas.master.configconnection(self.con))
     def recolor(self, what, value, minval=None, maxval=None):
         self.canvas.itemconfig(self.ids[what], fill=tocolor(value, minval, maxval))
+    def remove(self):
+        for part in self.ids:
+            self.canvas.delete(self.ids[part])
 
 class GConnection(Connection, Watchable):
     def __init__(self, canvas, startpos, endpos, *args, **kwargs):
@@ -146,8 +149,8 @@ class GUnit(Unit, Watchable):
         print("Adding {} unit at {}, {}".format(str(type(self)), *position))
         self.canvas = canvas
         self.graphic = UnitGraphic(self, canvas, position)
-        super().__init__(*args, **kwargs)
         self.position = position
+        super().__init__(*args, **kwargs)
         self.weights = [GConnection() for weight in self.weights]
     @property
     def position(self):
@@ -166,6 +169,16 @@ class GUnit(Unit, Watchable):
             self.graphic.recolor('indelta', self.delta)
         elif name in ('derivative', 'outdelta'):
             self.graphic.recolor(name, val)
+        elif name == 'recurrent':
+            if bool(val): #if we're making it recurrent
+                if not self in self.outputs: #make sure we aren't already
+                    super().add_output(self, GConnection(self.canvas, (self.position[0], self.position[1]+5), (self.position[0]+20, self.position[1]+5)))
+            else: #if we're taking away recurrency / init saying we don't have it
+                if self in self.outputs: #make sure we really are taking it away
+                    removefrom = self.outputs.index(self)
+                    del self.outputs[removefrom]
+                    self.weights[removefrom].graphic.remove()
+                    del self.weights[removefrom]
     def highlight(self):
         for part in self.graphic.ids:
             self.canvas.itemconfig(self.graphic.ids[part], outline='yellow')
@@ -236,7 +249,9 @@ class Checkerybutton(Checkbutton):
     def get(self):
         return self.variable.get()
     def set(self, newval):
-        self.variable.set(newval)
+        self.variable.set(int(newval))
+        if self.get(): self.select()
+        else: self.deselect()
 
 class UnitConfigFrame(Frame, Watcher):
     def __init__(self, master):
@@ -276,7 +291,6 @@ class UnitConfigFrame(Frame, Watcher):
         self.parts['delta'].grid(column=3, row=0)
         self.parts['derivative'].grid(column=3, row=1)
         self.parts['outdelta'].grid(column=3, row=2)
-        
 
 class ConnectionConfigFrame(Frame, Watcher):
     def __init__(self, master):
@@ -373,7 +387,8 @@ class App(Frame):
         self.clicked_on_a_unit = True
         self.unitconfig.show(targetunit)
         if self.startunit: #we already have a unit to start with
-            self.startunit.add_output(targetunit, GConnection(self.canvas, self.startunit.position, targetunit.position))
+            if self.startunit is targetunit: self.startunit.recurrent=True
+            else: self.startunit.add_output(targetunit, GConnection(self.canvas, self.startunit.position, targetunit.position))
             self.startunit = None
         self.startunit = targetunit
     def configconnection(self, connection):
