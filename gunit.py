@@ -4,20 +4,27 @@ from units import Connection
 
 MAXVAL = Connection.max_magnitude
 
-def value_to_color(val, minval = -MAXVAL, maxval = MAXVAL):
-    #val is a float, which should be in [-maxval, maxval]
-    #but that clipping will already be taken care of in Connection class
+def value_to_color(val, minval=-MAXVAL, maxval=MAXVAL):
     if minval is None: minval = -MAXVAL
     if maxval is None: maxval = MAXVAL
-    ###Need to handle case where val is a list - just use last item in list
     if hasattr(val, "__iter__"): #acts like a list
         if val: val = val[-1]
         else: val = 0
-    color = (val - minval) / (maxval - minval)
-    color *= 16**6 #like a html color code
-    color = max(0, min(int(color), 16**6-1))
-    color = "#{:06x}".format(color)
-    return color
+    hue, saturation, lightness = 360*(val-minval)/(maxval-minval), 0.6, 0.5
+    chroma = (1-abs(2*lightness-1))*saturation
+    hue_prime = hue / 60
+    x = chroma * (1 - abs((hue_prime % 2.0)-1))
+    r,g,b = 0,0,0
+    if 0 <= hue_prime < 1:   r,g,b=chroma,x,0
+    elif 1 <= hue_prime < 2: r,g,b=x,chroma,0
+    elif 2 <= hue_prime < 3: r,g,b=0,chroma,x
+    elif 3 <= hue_prime < 4: r,g,b=0,x,chroma
+    elif 4 <= hue_prime < 5: r,g,b=x,0,chroma
+    elif 5 <= hue_prime < 6: r,g,b=chroma,0,x
+    m = lightness - chroma/2
+    r,g,b = r+m, g+m, b+m
+    r,g,b = 256*r, 256*g, 256*b
+    return "#{:02x}{:02x}{:02x}".format(int(r),int(g),int(b))
 tocolor = value_to_color
 
 
@@ -105,7 +112,7 @@ class GOutputUnit(GUnit, OutputUnit):
 class OptionsFrame(Frame):
     def __init__(self, master):
         super().__init__(master)
-        self.pack(anchor=SW)
+        self.pack(side=LEFT)
         self._unit_type = StringVar()
         self._unit_type.set('hidden')
         Radiobutton(self, text='Input Unit', variable=self._unit_type, value='input', indicatoron=0).pack(anchor=W)
@@ -125,7 +132,7 @@ nonlinearity
 class UnitConfigFrame(Frame):
     def __init__(self, master):
         super().__init__(master)
-        self.pack(anchor=SE)
+        self.pack(side=LEFT, fill=X, expand=True)
     def show_unit(self, unit):
         print("Show unit")
 
@@ -134,8 +141,8 @@ class UnitConfigFrame(Frame):
 #Except for value, moment, delta_accumulator, and previous_delta
 class ConnectionConfigFrame(Frame):
     def __init__(self, master):
-        super().__init__(master)
-        self.pack(anchor=SE)
+        super().__init__(master, width=1)
+        self.pack(side=LEFT, fill=X, expand=True)
         self.con = None
         typeaparts = ['value', 'moment', 'delta_accumulator', 'previous_delta']
         typebparts = ['plasticity', 'momentum', 'decay']
@@ -145,9 +152,15 @@ class ConnectionConfigFrame(Frame):
         for part in typebparts:
             self.parts[part] = Scale(master=self, from_=0, to=1)
         for part in self.parts:
-            print(part)
-            self.parts[part].config(resolution=-1, label=part, orient=HORIZONTAL, command=self.updateconnection(part))
-            self.parts[part].pack()
+            self.parts[part].config(resolution=-1, label=part, orient=HORIZONTAL, digits=4, command=self.updateconnection(part))
+            #self.parts[part].pack()
+        self.parts['value'].grid(row=0)
+        self.parts['plasticity'].grid(row=0, column=1)
+        self.parts['momentum'].grid(row=0, column=2)
+        self.parts['decay'].grid(row=0, column=3)
+        self.parts['moment'].grid(row=1)
+        self.parts['delta_accumulator'].grid(row=1, column=1)
+        self.parts['previous_delta'].grid(row=1, column=2)
     def show_connection(self, con):
         self.con = con
         for part in self.parts:
@@ -170,10 +183,10 @@ class App(Frame):
     def __init__(self, master=None):
         #if master not init'd, will use current root window or create one automatically I think
         super().__init__(master)
-        self.pack()
+        self.pack(fill=BOTH, expand=True)
         self.config(cursor='cross')
-        self.canvas = Canvas(self)
-        self.canvas.pack(anchor=N)
+        self.canvas = Canvas(self, bg='white')
+        self.canvas.pack(side=TOP, fill=BOTH, expand=True)
         self.canvas.bind("<Button-1>", self.addunit)
         self.master.bind("q", lambda e: self.master.destroy())
         
