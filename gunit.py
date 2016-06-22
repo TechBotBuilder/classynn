@@ -4,12 +4,16 @@ from units import Connection
 
 MAXVAL = Connection.max_magnitude
 
+def take_care_of_lists(value):
+    if hasattr(value, "__iter__"): #acts like a list
+        if value: value = value[-1]
+        else: value = 0
+    return value
+
 def value_to_color(val, minval=-MAXVAL, maxval=MAXVAL):
     if minval is None: minval = -MAXVAL
     if maxval is None: maxval = MAXVAL
-    if hasattr(val, "__iter__"): #acts like a list
-        if val: val = val[-1]
-        else: val = 0
+    val = take_care_of_lists(val)
     hue, saturation, lightness = 360*(val-minval)/(maxval-minval), 0.6, 0.5
     chroma = (1-abs(2*lightness-1))*saturation
     hue_prime = hue / 60
@@ -27,9 +31,17 @@ def value_to_color(val, minval=-MAXVAL, maxval=MAXVAL):
     return "#{:02x}{:02x}{:02x}".format(int(r),int(g),int(b))
 tocolor = value_to_color
 
+class Watchable:
+    watcher = None
+    def __setattr__(self, name, value):
+        super().__setattr__(name, value)
+        if self.watcher and name in self.watcher.parts: #if we're being watched
+            if self.watcher.parts[name].get() != value:#if it doesn't already know what's happening
+                self.watcher.parts[name].set(value)#let the watcher know what's happening
 
-class GConnection(Connection):
+class GConnection(Connection, Watchable):
     def __init__(self, canvas, startpos, endpos, *args, **kwargs):
+        self.watcher = None
         print("Adding connection from {} to {}.".format(startpos, endpos))
         self.canvas = canvas
         self.id = self.canvas.create_line(*startpos, *endpos, fill='black', width=4)
@@ -73,7 +85,7 @@ class Graphic:
     def recolor(self, what, value, minval=None, maxval=None):
         self.canvas.itemconfig(self.ids[what], fill=tocolor(value, minval, maxval))
 
-class GUnit(Unit):
+class GUnit(Unit, Watchable):
     def __init__(self, canvas, position, *args, **kwargs):
         print("Adding {} unit at {}, {}".format(str(type(self)), *position))
         self.canvas = canvas
@@ -122,28 +134,48 @@ class OptionsFrame(Frame):
     def unit_type(self):
         return self._unit_type.get()
 
+class Watcher:
+    watched_item = None
+    def __init__(self):
+        self.parts = {}
+    def show(self, newWatched):
+        if self.watched_item:
+            self.watched_item.watcher = None #tell previous item that it is no longer being watched
+        self.watched_item = newWatched
+        self.watched_item.watcher = self #tell new watched item that it is being watched
+        for part in self.parts:
+            self.parts[part].set(take_care_of_lists(self.watched_item.__getattribute__(part))) #load in this item's settings
+    def update_display(self, name):
+        return lambda value: self._update_display(name, value)
+    def _update_display(self, name, value):
+        if self.watched_item:
+            setattr(self.watched_item, name, float(value))
+
 """
 What is needed?
 position config
 value config
 nonlinearity
-
 """
-class UnitConfigFrame(Frame):
+class UnitConfigFrame(Frame, Watcher):
     def __init__(self, master):
         super().__init__(master)
         self.pack(side=LEFT, fill=X, expand=True)
-    def show_unit(self, unit):
-        print("Show unit")
+        self.parts = {}
+        numberparts = ['logit', 'frozenlogit', 'delta', 'output', 'outdelta', 'derivative']
+        arrayparts = ['nonlinearity', 'hidden_state']
+        booleanparts = ['frozen', 'recurrent']
+        self.parts['dropout'] = Scale(master=self, from_=0, to=1)
+        for part in numberparts:
+            self.parts[part] = Scale(master=self, from_=-MAXVAL, to=MAXVAL)
 
 #the menu mainly is used to change configurations
 #and doesn't have to worry about them changing without it knowing.
 #Except for value, moment, delta_accumulator, and previous_delta
-class ConnectionConfigFrame(Frame):
+class ConnectionConfigFrame(Frame, Watcher):
     def __init__(self, master):
         super().__init__(master, width=1)
         self.pack(side=LEFT, fill=X, expand=True)
-        self.con = None
         typeaparts = ['value', 'moment', 'delta_accumulator', 'previous_delta']
         typebparts = ['plasticity', 'momentum', 'decay']
         self.parts = {}
@@ -152,8 +184,7 @@ class ConnectionConfigFrame(Frame):
         for part in typebparts:
             self.parts[part] = Scale(master=self, from_=0, to=1)
         for part in self.parts:
-            self.parts[part].config(resolution=-1, label=part, orient=HORIZONTAL, digits=4, command=self.updateconnection(part))
-            #self.parts[part].pack()
+            self.parts[part].config(resolution=-1, label=part, orient=HORIZONTAL, digits=4, command=self.update_display(part))
         self.parts['value'].grid(row=0)
         self.parts['plasticity'].grid(row=0, column=1)
         self.parts['momentum'].grid(row=0, column=2)
@@ -161,16 +192,7 @@ class ConnectionConfigFrame(Frame):
         self.parts['moment'].grid(row=1)
         self.parts['delta_accumulator'].grid(row=1, column=1)
         self.parts['previous_delta'].grid(row=1, column=2)
-    def show_connection(self, con):
-        self.con = con
-        for part in self.parts:
-            self.parts[part].set(self.con.__getattribute__(part))
-    def updateconnection(self, name):
-        return lambda value: self._updateconnection(name, value)
-    def _updateconnection(self, name, value):
-        if self.con:
-            setattr(self.con, name, float(value))
-            #print("Set {} to {}".format(name, float(value)))
+
 
 """
 need button to start/stop forward/backward
@@ -183,17 +205,25 @@ class App(Frame):
     def __init__(self, master=None):
         #if master not init'd, will use current root window or create one automatically I think
         super().__init__(master)
+        self.master.minsize(height=400, width=600)
+        self.master.title("Neural Network Simulation")
         self.pack(fill=BOTH, expand=True)
+        
+        
+        
         self.config(cursor='cross')
         self.canvas = Canvas(self, bg='white')
         self.canvas.pack(side=TOP, fill=BOTH, expand=True)
         self.canvas.bind("<Button-1>", self.addunit)
         self.master.bind("q", lambda e: self.master.destroy())
         
-        #default internal values
         self.options = OptionsFrame(self)
+        
         self.connectionconfig = ConnectionConfigFrame(self)
+        
         self.unitconfig = UnitConfigFrame(self)
+        
+        #default internal values
         self.startunit = None
         self.clicked_on_a_unit = False #See http://stackoverflow.com/a/14480311 - both canvas and unit callbacks were firing
         self.clicked_on_a_connection = False
@@ -220,7 +250,7 @@ class App(Frame):
         if self.clicked_on_a_connection:
             return
         self.clicked_on_a_unit = True
-        self.unitconfig.show_unit(targetunit)
+        self.unitconfig.show(targetunit)
         if self.startunit: #we already have a unit to start with
             self.startunit.add_output(targetunit, GConnection(self.canvas, self.startunit.position, targetunit.position))
             self.startunit = None
@@ -230,14 +260,13 @@ class App(Frame):
         return lambda event: self._configconnection(connection, event)
     def _configconnection(self, connection, event):
         self.clicked_on_a_connection = True
-        self.connectionconfig.show_connection(connection)
-        
+        self.connectionconfig.show(connection)
+
 
 
 if __name__ == '__main__':
     print("Starting simulation...")
     root = Tk()
-    root.title("Neural Network Simulation")
     app = App(root)
     root.mainloop()
 
