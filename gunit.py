@@ -92,7 +92,7 @@ class ConnectionGraphic:
     def __init__(self, con, canvas, startpos, endpos):
         self.con = con
         self.canvas = canvas
-        self.ids = {'value': self.canvas.create_line(*startpos, *endpos, fill='black', width=4)}
+        self.ids = {'value': self.canvas.create_line(*startpos, *endpos, fill='black', width=5, stipple='gray25')}
         for part in self.ids:
             self.canvas.tag_bind(self.ids[part], "<Button-1>", self.canvas.master.configconnection(self.con))
     def recolor(self, what, value, minval=None, maxval=None):
@@ -114,10 +114,10 @@ class GConnection(Connection, Watchable):
         self.graphic.recolor('value', self.value)
     def highlight(self):
         for part in self.graphic.ids:
-            self.canvas.itemconfig(self.graphic.ids[part], width=8)
+            self.canvas.itemconfig(self.graphic.ids[part], width=8, stipple='gray50')
     def dehighlight(self):
         for part in self.graphic.ids:
-            self.canvas.itemconfig(self.graphic.ids[part], width=4)
+            self.canvas.itemconfig(self.graphic.ids[part], width=5, stipple='gray25')
 
 class UnitGraphic:
     def __init__(self, unit, canvas, position):
