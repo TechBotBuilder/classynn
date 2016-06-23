@@ -320,7 +320,46 @@ need button to start/stop forward/backward
 need slider to change speed of forward/backward
 """
 class RunFrame(Frame):
-    pass
+    time_delta = 10 #milliseconds
+    def __init__(self, master, canvas):
+        super().__init__(master)
+        self.canvas = canvas
+        self.position = 0
+        self.line = self.canvas.create_line(0, 0, 0, self.canvas.winfo_height(), width=10, stipple='gray12', dash=(1,2,2,1))
+        self.canvas.bind("<Configure>", self.resize_line)
+        self.speed = IntVar() #speeds in pixels per second
+        Scale(master=self, label='Speed (px/s)', orient=HORIZONTAL, resolution=10, variable=self.speed,
+            from_=10, to=1000).pack(anchor=N+W)
+        buttons = ['forward', 'pause', 'backprop']
+        self.selected = StringVar()
+        for button in buttons:
+            Radiobutton(self, text=button, variable=self.selected, value=button).pack(side=LEFT, anchor=S+W)
+        self.selected.set('pause')
+        self.pack(side=TOP, fill=X)
+        self.update_position()
+    def resize_line(self, event):
+        oldcoords = self.canvas.coords(self.line)
+        self.canvas.coords(self.line, oldcoords[0], 0, oldcoords[2], event.height)
+    def update_position(self):
+        command = self.selected.get()
+        if command == 'pause':
+            self.after(200, self.update_position)
+            return
+        deltax = (self.time_delta * 0.001) * self.speed.get() #seconds*(pixels/second)
+        maxposition = self.canvas.winfo_width()
+        minposition = 0
+        if command == 'pause':
+            deltax = 0
+        elif command == 'backprop':
+            deltax *= -1
+        oldcoords = self.canvas.coords(self.line)
+        newx = max(minposition, min(oldcoords[0]+deltax, maxposition))
+        deltax = newx - oldcoords[0]
+        self.canvas.move(self.line, deltax, 0)
+        if ((oldcoords[0] == maxposition and command == 'forward')
+            or (oldcoords[0] == minposition and command == 'backprop')):
+                self.selected.set('pause')
+        self.after(self.time_delta, self.update_position)
 
 class App(Frame):
     def __init__(self, master=None):
@@ -328,12 +367,13 @@ class App(Frame):
         super().__init__(master)
         self.master.minsize(height=600, width=1000)
         self.master.title("Neural Network Simulation")
+        self.config(cursor='cross')
         self.pack(fill=BOTH, expand=True)
         
-        
-        
-        self.config(cursor='cross')
         self.canvas = Canvas(self, bg='white')
+        self.runner = RunFrame(self, self.canvas)
+        
+        #See http://stackoverflow.com/a/7734187 to make scrollbars
         self.canvas.pack(side=TOP, fill=BOTH, expand=True)
         self.canvas.bind("<Button-1>", self.addunit)
         self.master.bind("q", lambda e: self.master.destroy())
@@ -350,7 +390,7 @@ class App(Frame):
         disable_frame(self.unitconfig)
         
         self.message = StringVar()
-        Label(master=self, height=0, justify=LEFT, anchor=W, textvariable=self.message, bg='gray').pack(side=BOTTOM, fill=X)
+        Label(master=self, height=0, justify=LEFT, anchor=W, textvariable=self.message, bg='gray', relief=SUNKEN).pack(side=BOTTOM, fill=X)
         self.message.set("Starting...")
         
         #default internal values
