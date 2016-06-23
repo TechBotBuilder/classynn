@@ -32,7 +32,7 @@ def take_care_of_lists(value):
     if hasattr(value, "__iter__"): #acts like a list
         if value: value = value[-1]
         else: value = 0
-    elif hasattr(value, '__call__'):
+    elif hasattr(value, '__call__'): #acts like a function
         value = value.__name__
     return value
 
@@ -82,11 +82,10 @@ class Watchable:
 
 class ConnectionGraphic:
     def __init__(self, con, canvas, startpos, endpos):
-        self.con = con
         self.canvas = canvas
         self.ids = {'value': self.canvas.create_line(*startpos, *endpos, fill='black', width=5, stipple='gray25')}
         for part in self.ids:
-            self.canvas.tag_bind(self.ids[part], "<Button-1>", self.canvas.master.configconnection(self.con))
+            self.canvas.tag_bind(self.ids[part], "<Button-1>", self.canvas.master.configconnection(con))
     def recolor(self, what, value, minval=None, maxval=None):
         self.canvas.itemconfig(self.ids[what], fill=tocolor(value, minval, maxval))
     def remove(self):
@@ -114,14 +113,18 @@ class GConnection(Connection, Watchable):
         for part in self.graphic.ids:
             self.canvas.itemconfig(self.graphic.ids[part], width=5, stipple='gray25')
 
-class UnitGraphic:
+class UnitGraphic(Frame):
     def __init__(self, unit, canvas, position):
+        self.unit = unit
         self.canvas = canvas
         self.positions = {}
         self.find_bounds(position)
-        self.gen_graphic(position)
+        self.gen_graphic()
+        self.canvas.addtag_withtag('unit', self.ids['_derivative'])
         for piece in self.ids:
             self.canvas.tag_bind(self.ids[piece], "<Button-1>", self.canvas.master.addconnection(unit))
+        super().__init__(master=canvas, width=0, height=0)
+        self.checktags()
     def find_bounds(self, mainposition):
         mp = mainposition
         bigsize = 20
@@ -129,13 +132,14 @@ class UnitGraphic:
         self.positions['logit'] = (*mp, mp[0]+smallsize, mp[1]+bigsize)
         self.positions['activation'] = (mp[0]+smallsize, mp[1], mp[0]+bigsize+2*smallsize, mp[1]+bigsize)
         self.positions['indelta'] = (mp[0], mp[1]+bigsize, mp[0]+smallsize, mp[1]+bigsize+smallsize)
-        self.positions['derivative'] = (mp[0]+smallsize, mp[1]+bigsize, mp[0]+smallsize+bigsize, mp[1]+bigsize+smallsize)
+        self.positions['_derivative'] = (mp[0]+smallsize, mp[1]+bigsize, mp[0]+smallsize+bigsize, mp[1]+bigsize+smallsize)
         self.positions['outdelta'] = (mp[0]+smallsize+bigsize, mp[1]+bigsize, mp[0]+2*smallsize+bigsize, mp[1]+bigsize+smallsize)
-    def gen_graphic(self, position):
-        self.ids = dict([(key, self.canvas.create_rectangle(*(self.positions[key]), fill=tocolor(0, 0, 1))) for key in self.positions.keys()])
+    def gen_graphic(self):
+        self.ids = dict([(key, self.canvas.create_rectangle(*(self.positions[key]),
+                fill=tocolor(0, 0, 1))) for key in self.positions.keys()])
     @property
     def position(self):
-        return self.canvas.bbox(self.ids['activation'])[:2]
+        return self.canvas.bbox(self.ids['logit'])[:2]
     @position.setter
     def position(self, newposition):
         self.find_bounds(newposition)
@@ -143,6 +147,23 @@ class UnitGraphic:
             self.canvas.coords(item, *self.positions[key])
     def recolor(self, what, value, minval=None, maxval=None):
         self.canvas.itemconfig(self.ids[what], fill=tocolor(value, minval, maxval))
+    def checktags(self):
+        tags = self.canvas.itemcget(self.ids['_derivative'], 'tags')
+        if 'forward' in tags and 'forward_done' not in tags:
+            self.unit.go()
+            self.canvas.addtag_withtag('forward_done', self.ids['_derivative'])
+        elif 'backprop' in tags and 'backprop_done' not in tags:
+            self.unit.backprop()
+            self.canvas.addtag_withtag('backprop_done', self.ids['_derivative'])
+        elif 'reset' in tags:
+            self.unit.reset()
+            self.cleartags()
+        self.after(20, self.checktags)
+    def cleartags(self):
+        self.canvas.itemconfig(self.ids['_derivative'], tags='unit')
+    def remove(self):
+        for part in self.ids:
+            self.canvas.delete(self.ids[part])
 
 class GUnit(Unit, Watchable):
     def __init__(self, canvas, position, *args, **kwargs):
@@ -167,7 +188,7 @@ class GUnit(Unit, Watchable):
             self.graphic.recolor('activation', self.output)
         elif name == 'delta':
             self.graphic.recolor('indelta', self.delta)
-        elif name in ('derivative', 'outdelta'):
+        elif name in ('_derivative', 'outdelta'):
             self.graphic.recolor(name, val)
         elif name == 'recurrent':
             if bool(val): #if we're making it recurrent
@@ -181,10 +202,10 @@ class GUnit(Unit, Watchable):
                     del self.weights[removefrom]
     def highlight(self):
         for part in self.graphic.ids:
-            self.canvas.itemconfig(self.graphic.ids[part], outline='yellow')
+            self.canvas.itemconfig(self.graphic.ids[part], outline='yellow', width=3)
     def dehighlight(self):
         for part in self.graphic.ids:
-            self.canvas.itemconfig(self.graphic.ids[part], outline='black')
+            self.canvas.itemconfig(self.graphic.ids[part], outline='black', width=1)
 
 class GInputUnit(GUnit, InputUnit):
     def __init__(self, canvas, position, *args, **kwargs):
@@ -259,7 +280,7 @@ class UnitConfigFrame(Frame, Watcher):
         super().__init__(master)
         self.pack(side=LEFT, fill=X, expand=True)
         self.parts = {}
-        numberparts = ['logit', 'frozenlogit', 'delta', 'output', 'outdelta', 'derivative']#, 'hidden_state']
+        numberparts = ['logit', 'frozenlogit', 'delta', 'output', 'outdelta', '_derivative']
         booleanparts = ['frozen', 'recurrent']
         self.parts['dropout'] = Scale(master=self, from_=0, to=1)
         for part in numberparts:
@@ -289,7 +310,7 @@ class UnitConfigFrame(Frame, Watcher):
         self.parts['output'].grid(column=2, row=2)
         
         self.parts['delta'].grid(column=3, row=0)
-        self.parts['derivative'].grid(column=3, row=1)
+        self.parts['_derivative'].grid(column=3, row=1)
         self.parts['outdelta'].grid(column=3, row=2)
 
 class ConnectionConfigFrame(Frame, Watcher):
@@ -324,17 +345,18 @@ class RunFrame(Frame):
     def __init__(self, master, canvas):
         super().__init__(master)
         self.canvas = canvas
-        self.position = 0
         self.line = self.canvas.create_line(0, 0, 0, self.canvas.winfo_height(), width=10, stipple='gray12', dash=(1,2,2,1))
         self.canvas.bind("<Configure>", self.resize_line)
-        self.speed = IntVar() #speeds in pixels per second
-        Scale(master=self, label='Speed (px/s)', orient=HORIZONTAL, resolution=10, variable=self.speed,
-            from_=10, to=1000).pack(anchor=N+W)
         buttons = ['forward', 'pause', 'backprop']
         self.selected = StringVar()
         for button in buttons:
-            Radiobutton(self, text=button, variable=self.selected, value=button).pack(side=LEFT, anchor=S+W)
+            Radiobutton(self, text=button, variable=self.selected, value=button).pack(side=LEFT)
         self.selected.set('pause')
+        self.speed = IntVar() #speeds in pixels per second
+        Scale(master=self, label='Speed (px/s)', orient=HORIZONTAL, resolution=10, variable=self.speed,
+            from_=10, to=1000, width=20).pack(side=LEFT)
+        self.speed.set(500)
+        Button(master=self, text='Reset all units', command=self.reset).pack(side=LEFT)
         self.pack(side=TOP, fill=X)
         self.update_position()
     def resize_line(self, event):
@@ -356,16 +378,36 @@ class RunFrame(Frame):
         newx = max(minposition, min(oldcoords[0]+deltax, maxposition))
         deltax = newx - oldcoords[0]
         self.canvas.move(self.line, deltax, 0)
+        
+        for unit in self.find_intersecting():
+            self.canvas.addtag_withtag(command, unit)
+        
         if ((oldcoords[0] == maxposition and command == 'forward')
             or (oldcoords[0] == minposition and command == 'backprop')):
                 self.selected.set('pause')
         self.after(self.time_delta, self.update_position)
+    def find_intersecting(self):
+        if self.selected.get() in ('forward', 'backprop'):
+            overlap=set(self.canvas.find_overlapping(*self.canvas.bbox(self.line)))
+            #print("Overlap: {}".format(overlap))
+            units = set(self.canvas.find_withtag('unit'))
+            #print("Units: {}".format(units))
+            already=set(self.canvas.find_withtag(self.selected.get() + '_done'))
+            #print("Already: {}".format(already))
+            chosen_units = (overlap & units) - already
+        else:
+            chosen_units = set()
+        return chosen_units
+    def reset(self):
+        self.selected.set("pause")
+        self.canvas.move(self.line, -self.canvas.coords(self.line)[0], 0)
+        self.canvas.addtag_withtag("reset", "unit")
 
 class App(Frame):
     def __init__(self, master=None):
         #if master not init'd, will use current root window or create one automatically I think
         super().__init__(master)
-        self.master.minsize(height=600, width=1000)
+        self.master.minsize(height=600, width=800)
         self.master.title("Neural Network Simulation")
         self.config(cursor='cross')
         self.pack(fill=BOTH, expand=True)

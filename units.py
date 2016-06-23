@@ -79,6 +79,7 @@ class Unit:
         self.frozenlogit = 0
         self.hidden_state = []
         self.derivative = []
+        self._derivative = 0
         self.recurrent = recurrent
         self.weights = [Connection() for output in self.outputs]
         if self.recurrent:
@@ -107,7 +108,8 @@ class Unit:
     def forward(self):
         self.output = self.nonlinearity(self.logit)
         self.hidden_state.append(self.output)
-        self.derivative.append(self.nonlinearity_deriv(self.logit))
+        self._derivative = self.nonlinearity_deriv(self.logit)
+        self.derivative.append(self._derivative)
         self.logit = 0
     
     """This is what people should call."""
@@ -130,6 +132,8 @@ class Unit:
         self.hidden_state = []
         self.frozen = False
         self.delta = 0
+        self.output = 0
+        self._derivative = 0
         self.derivative = []
     
     def backprop(self, commit = True):
@@ -140,6 +144,8 @@ class Unit:
             weight.update(output.delta * stuff, commit)
         self.outdelta = delta
         self.delta = delta * self.derivative.pop()
+        if self.derivative: self._derivative = self.derivative[-1]
+        else: self._derivative = 0
     
     def add_output(self, output, weight=None):
         self.outputs.append(output)
@@ -225,6 +231,8 @@ class OutputUnit(Unit):
         cost_val = self.cost_function(output, target)
         dcost = self.cost_derivative(output, target)
         self.delta = dcost * internal_deriv
+        if self.derivative: self._derivative = self.derivative[-1]
+        else: self._derivative = 0
         return cost_val
 
 class OutputGroup(Group):
