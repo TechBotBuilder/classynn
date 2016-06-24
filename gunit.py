@@ -213,6 +213,10 @@ class GInputUnit(GUnit, InputUnit):
     def __init__(self, canvas, position, *args, **kwargs):
         GUnit.__init__(self, canvas, position)
         InputUnit.__init__(self, *args, **kwargs)
+    def reset(self):
+        logit = self.logit
+        super().reset()
+        self.logit = logit
 
 class GOutputUnit(GUnit, OutputUnit):
     def __init__(self, canvas, position, *args, **kwargs):
@@ -221,6 +225,10 @@ class GOutputUnit(GUnit, OutputUnit):
         self.target = 0
     def backprop(self):
         super().cost(self.target)
+    def reset(self):
+        target = self.target
+        super().reset()
+        self.target = target
 
 class OptionsFrame(Frame):
     def __init__(self, master):
@@ -359,11 +367,6 @@ class ConnectionConfigFrame(Frame, Watcher):
         self.parts['previous_delta'].grid(row=3, column=1)
         self.deletebutton.grid(column=2, row=0, rowspan=3)
 
-
-"""
-need button to start/stop forward/backward
-need slider to change speed of forward/backward
-"""
 class RunFrame(Frame):
     time_delta = 10 #milliseconds
     def __init__(self, master, canvas):
