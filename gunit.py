@@ -217,6 +217,10 @@ class GInputUnit(GUnit, InputUnit):
         logit = self.logit
         super().reset()
         self.logit = logit
+    def forward(self):
+        logit = self.logit
+        super().forward()
+        self.logit = logit
 
 class GOutputUnit(GUnit, OutputUnit):
     def __init__(self, canvas, position, *args, **kwargs):
@@ -256,7 +260,7 @@ class Watcher:
             if isinstance(self.watched_item, OutputUnit): self.parts['target'].grid()
             else: self.parts['target'].grid_remove()
         for part in self.parts:
-            if not isinstance(self.watched_item, OutputUnit) and part=='target': continue
+            if part=='target' and not isinstance(self.watched_item, OutputUnit): continue
             self.parts[part].set(take_care_of_lists(self.watched_item.__getattribute__(part))) #load in this item's settings
     def update_display(self, name):
         def f(*args):
