@@ -8,7 +8,7 @@ def dlinear(y): return 1
 
 class Connection:
     max_magnitude = 10
-    def __init__(self, value=np.random.randn, plasticity=0.001, momentum=0.6, decay=0):
+    def __init__(self, value=np.random.randn, plasticity=0.01, momentum=0.6, decay=0):
         if hasattr(value, '__call__'):
             self.value = value()
         else:
@@ -131,6 +131,7 @@ class Unit:
         self.frozenlogit = 0
         self.hidden_state = []
         self.frozen = False
+        self.outdelta = 0
         self.delta = 0
         self.output = 0
         self._derivative = 0
@@ -230,6 +231,7 @@ class OutputUnit(Unit):
             self.backprop()
         cost_val = self.cost_function(output, target)
         dcost = self.cost_derivative(output, target)
+        self.outdelta = dcost
         self.delta = dcost * internal_deriv
         if self.derivative: self._derivative = self.derivative[-1]
         else: self._derivative = 0

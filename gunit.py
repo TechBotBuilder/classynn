@@ -164,6 +164,8 @@ class UnitGraphic(Frame):
     def remove(self):
         for part in self.ids:
             self.canvas.delete(self.ids[part])
+        del self.unit
+        del self
 
 class GUnit(Unit, Watchable):
     def __init__(self, canvas, position, *args, **kwargs):
@@ -216,6 +218,9 @@ class GOutputUnit(GUnit, OutputUnit):
     def __init__(self, canvas, position, *args, **kwargs):
         GUnit.__init__(self, canvas, position)
         OutputUnit.__init__(self, *args, **kwargs)
+        self.target = 0
+    def backprop(self):
+        super().cost(self.target)
 
 class OptionsFrame(Frame):
     def __init__(self, master):
@@ -233,11 +238,15 @@ class OptionsFrame(Frame):
 class Watcher:
     def __init__(self):
         self.watched_item = None
+        self.deletebutton = Button(master=self, text="Delete this item", command=self.delete)
     def show(self, newWatched):
         self.clear()
         self.watched_item = newWatched
         self.watched_item.watcher = self #tell new watched item that it is being watched
         enable_frame(self)
+        if isinstance(self.watched_item, Unit):
+            if isinstance(self.watched_item, OutputUnit): self.target.grid()
+            else: self.target.grid_remove()
         for part in self.parts:
             self.parts[part].set(take_care_of_lists(self.watched_item.__getattribute__(part))) #load in this item's settings
     def update_display(self, name):
@@ -262,6 +271,13 @@ class Watcher:
             self.watched_item.watcher = None #tell previous item that it is no longer being watched
             self.watched_item = None
         disable_frame(self)
+    def delete(self):
+        if self.watched_item:
+            self.watched_item.graphic.remove()
+            self.clear()
+    def set_target(self, val):
+        if self.watched_item and isinstance(self.watched_item, OutputUnit):
+            self.watched_item.target = float(val)
 
 class Checkerybutton(Checkbutton):
     def __init__(self, *args, **kwargs):
@@ -276,8 +292,8 @@ class Checkerybutton(Checkbutton):
 
 class UnitConfigFrame(Frame, Watcher):
     def __init__(self, master):
-        Watcher.__init__(self)
         super().__init__(master)
+        Watcher.__init__(self)
         self.pack(side=LEFT, fill=X, expand=True)
         self.parts = {}
         numberparts = ['logit', 'frozenlogit', 'delta', 'output', 'outdelta', '_derivative']
@@ -297,6 +313,8 @@ class UnitConfigFrame(Frame, Watcher):
         
         self.parts['nonlinearity'] = nonlin_selected
         
+        self.target = Scale(master=self, from_=-MAXVAL, to=MAXVAL, label='Target value', command=self.set_target)
+        
         #Label(self, textvariable=self.parts['nonlinearity']).grid()
         self.parts['dropout'].grid(row=0)
         self.parts['frozen'].grid(row=1)
@@ -312,11 +330,14 @@ class UnitConfigFrame(Frame, Watcher):
         self.parts['delta'].grid(column=3, row=0)
         self.parts['_derivative'].grid(column=3, row=1)
         self.parts['outdelta'].grid(column=3, row=2)
+        
+        self.target.grid(column=4, row=0, rowspan=2)
+        self.deletebutton.grid(column=4, row=2)
 
 class ConnectionConfigFrame(Frame, Watcher):
     def __init__(self, master):
-        Watcher.__init__(self)
         super().__init__(master, width=1)
+        Watcher.__init__(self)
         self.pack(side=LEFT, fill=X, expand=True)
         typeaparts = ['value', 'moment', 'delta_accumulator', 'previous_delta']
         typebparts = ['plasticity', 'momentum', 'decay']
@@ -327,6 +348,7 @@ class ConnectionConfigFrame(Frame, Watcher):
             self.parts[part] = Scale(master=self, from_=0, to=1)
         for part in self.parts:
             self.parts[part].config(resolution=-1, label=part, orient=HORIZONTAL, digits=4, command=self.update_display(part))
+        
         self.parts['value'].grid(row=0, columnspan=2)
         self.parts['plasticity'].grid(row=1)
         self.parts['momentum'].grid(row=2)
@@ -334,6 +356,7 @@ class ConnectionConfigFrame(Frame, Watcher):
         self.parts['moment'].grid(row=1, column=1)
         self.parts['delta_accumulator'].grid(row=2, column=1)
         self.parts['previous_delta'].grid(row=3, column=1)
+        self.deletebutton.grid(column=2, row=0, rowspan=3)
 
 
 """
