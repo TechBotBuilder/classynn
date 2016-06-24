@@ -245,9 +245,10 @@ class Watcher:
         self.watched_item.watcher = self #tell new watched item that it is being watched
         enable_frame(self)
         if isinstance(self.watched_item, Unit):
-            if isinstance(self.watched_item, OutputUnit): self.target.grid()
-            else: self.target.grid_remove()
+            if isinstance(self.watched_item, OutputUnit): self.parts['target'].grid()
+            else: self.parts['target'].grid_remove()
         for part in self.parts:
+            if not isinstance(self.watched_item, OutputUnit) and part=='target': continue
             self.parts[part].set(take_care_of_lists(self.watched_item.__getattribute__(part))) #load in this item's settings
     def update_display(self, name):
         def f(*args):
@@ -313,7 +314,7 @@ class UnitConfigFrame(Frame, Watcher):
         
         self.parts['nonlinearity'] = nonlin_selected
         
-        self.target = Scale(master=self, from_=-MAXVAL, to=MAXVAL, label='Target value', command=self.set_target)
+        self.parts['target'] = Scale(master=self, from_=-MAXVAL, to=MAXVAL, label='Target value', command=self.set_target)
         
         #Label(self, textvariable=self.parts['nonlinearity']).grid()
         self.parts['dropout'].grid(row=0)
@@ -331,7 +332,7 @@ class UnitConfigFrame(Frame, Watcher):
         self.parts['_derivative'].grid(column=3, row=1)
         self.parts['outdelta'].grid(column=3, row=2)
         
-        self.target.grid(column=4, row=0, rowspan=2)
+        self.parts['target'].grid(column=4, row=0, rowspan=2)
         self.deletebutton.grid(column=4, row=2)
 
 class ConnectionConfigFrame(Frame, Watcher):
