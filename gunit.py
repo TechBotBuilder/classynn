@@ -398,6 +398,9 @@ class RunFrame(Frame):
             from_=10, to=1000, width=20).pack(side=LEFT)
         self.speed.set(500)
         Button(master=self, text='Reset all units', command=self.reset).pack(side=LEFT)
+        self.autoreset = Checkerybutton(master=self, text='Auto reset units', variable=IntVar())
+        self.autoreset.set(True)
+        self.autoreset.pack(side=LEFT)
         self.pack(side=TOP, fill=X)
         self.update_position()
     def resize_line(self, event):
@@ -426,6 +429,7 @@ class RunFrame(Frame):
         if ((oldcoords[0] == maxposition and command == 'forward')
             or (oldcoords[0] == minposition and command == 'backprop')):
                 self.selected.set('pause')
+                if self.autoreset.get() and command=='backprop': self.reset()
         self.after(self.time_delta, self.update_position)
     def find_intersecting(self):
         if self.selected.get() in ('forward', 'backprop'):
