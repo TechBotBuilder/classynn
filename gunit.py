@@ -1,6 +1,7 @@
 from tkinter import *
 from units import Unit, InputUnit, OutputUnit
 from units import Connection
+import weakref
 
 MAXVAL = Connection.max_magnitude
 
@@ -61,24 +62,32 @@ class Watchable:
     def __setattr__(self, name, value):
         if not 'watcher' in self.__dict__:
             super().__setattr__('watcher', None)
-        super().__setattr__(name, value)
+        if name != 'watcher':
+            super().__setattr__(name, value)
         if name == 'watcher':
+            if value:
+                super().__setattr__('watcher', weakref.ref(value))
+            else:
+                super().__setattr__('watcher', None)
             if 'graphic' in self.__dict__:
                 if value is None:
                     self.dehighlight()
                 else:
                     self.highlight()
-        elif self.watcher and name in self.watcher.parts: #if we're being watched
+        elif self.watcher and name in self.watcher().parts: #if we're being watched
             if name in ('nonlinearity', 'nonlinearity_deriv'):
-                if self.watcher.parts[name].get() != value.__name__:
-                    self.watcher.parts[name].set(value.__name__)
+                if self.watcher().parts[name].get() != value.__name__:
+                    self.watcher().parts[name].set(value.__name__)
             else:
-                if self.watcher.parts[name].get() != value:#if it doesn't already know what's happening
-                    self.watcher.parts[name].set(value)#let the watcher know what's happening
+                if self.watcher().parts[name].get() != value:#if it doesn't already know what's happening
+                    self.watcher().parts[name].set(value)#let the watcher know what's happening
     def highlight(self):
         pass
     def dehighlight(self):
         pass
+    def remove(self):
+        if self.watcher and self.watcher():
+            self.watcher().clear()
 
 class ConnectionGraphic:
     def __init__(self, con, canvas, startpos, endpos):
@@ -94,7 +103,6 @@ class ConnectionGraphic:
 
 class GConnection(Connection, Watchable):
     def __init__(self, canvas, startpos, endpos, *args, **kwargs):
-        self.watcher = None
         print("Adding connection from {} to {}.".format(startpos, endpos))
         self.graphic = ConnectionGraphic(self, canvas, startpos, endpos)
         self.canvas = canvas
@@ -115,7 +123,7 @@ class GConnection(Connection, Watchable):
 
 class UnitGraphic(Frame):
     def __init__(self, unit, canvas, position):
-        self.unit = unit
+        self.unit = weakref.ref(unit)
         self.canvas = canvas
         self.positions = {}
         self.find_bounds(position)
@@ -150,13 +158,13 @@ class UnitGraphic(Frame):
     def checktags(self):
         tags = self.canvas.itemcget(self.ids['_derivative'], 'tags')
         if 'forward' in tags and 'forward_done' not in tags:
-            self.unit.go()
+            self.unit().go()
             self.canvas.addtag_withtag('forward_done', self.ids['_derivative'])
         elif 'backprop' in tags and 'backprop_done' not in tags:
-            self.unit.backprop()
+            self.unit().backprop()
             self.canvas.addtag_withtag('backprop_done', self.ids['_derivative'])
         elif 'reset' in tags:
-            self.unit.reset()
+            self.unit().reset()
             self.cleartags()
         self.after(20, self.checktags)
     def cleartags(self):
@@ -164,8 +172,6 @@ class UnitGraphic(Frame):
     def remove(self):
         for part in self.ids:
             self.canvas.delete(self.ids[part])
-        del self.unit
-        del self
 
 class GUnit(Unit, Watchable):
     def __init__(self, canvas, position, *args, **kwargs):
@@ -285,9 +291,13 @@ class Watcher:
             self.watched_item = None
         disable_frame(self)
     def delete(self):
+        #remove all references to watched_item
         if self.watched_item:
-            self.watched_item.graphic.remove()
-            self.clear()
+            self.watched_item.canvas.master.startunit = None
+            self.watched_item.canvas.master.clicked_on_a_unit = False
+            self.watched_item.remove()
+        #don't worry about connections to this unit from other units - let user remove those manually,
+        # which will also remove their starting-units' references to this object.
     def set_target(self, val):
         if self.watched_item and isinstance(self.watched_item, OutputUnit):
             self.watched_item.target = float(val)
