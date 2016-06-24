@@ -228,7 +228,7 @@ class OutputUnit(Unit):
             #re-add internal hidden state and derivative because backprop re-removes them
             self.hidden_state.append(output)
             self.derivative.append(internal_deriv)
-            self.backprop()
+            super().backprop()
         cost_val = self.cost_function(output, target)
         dcost = self.cost_derivative(output, target)
         self.outdelta = dcost
