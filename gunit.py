@@ -97,10 +97,14 @@ class ConnectionGraphic(Frame):
 
 class GConnection(Connection, Watchable):
     def __init__(self, canvas, startunit, endunit, *args, **kwargs):
-        if 'startpos' not in kwargs: startpos = startunit.position
-        else: startpos = kwargs['startpos']
-        if 'endpos' not in kwargs: endpos = endunit.position
-        else: endpos = kwargs['endpos']
+        if 'startpos' not in kwargs:
+            startpos = (startunit.position[0]+UnitGraphic.bigsize+2*UnitGraphic.smallsize, startunit.position[1])
+        else:
+            startpos = kwargs['startpos']
+        if 'endpos' not in kwargs:
+            endpos = endunit.position
+        else:
+            endpos = kwargs['endpos']
         MessageDisplay.set("Creating connection from {} to {}.".format(startpos, endpos))
         self.graphic = ConnectionGraphic(self, canvas, startpos, endpos)
         self.canvas = canvas
@@ -125,6 +129,8 @@ class GConnection(Connection, Watchable):
         self.remove()
 
 class UnitGraphic(Frame):
+    bigsize = 20
+    smallsize = 10
     def __init__(self, unit, canvas, position):
         self._u = unit #create a circular reference so unit objects are not deleted
         self.unit = weakref.ref(unit)
@@ -139,16 +145,14 @@ class UnitGraphic(Frame):
         self.checktags()
     def find_bounds(self, mainposition):
         mp = mainposition
-        bigsize = 20
-        smallsize = 10
-        self.positions['logit'] = (*mp, mp[0]+smallsize, mp[1]+bigsize)
-        self.positions['activation'] = (mp[0]+smallsize, mp[1], mp[0]+bigsize+2*smallsize, mp[1]+bigsize)
-        self.positions['indelta'] = (mp[0], mp[1]+bigsize, mp[0]+smallsize, mp[1]+bigsize+smallsize)
-        self.positions['_derivative'] = (mp[0]+smallsize, mp[1]+bigsize, mp[0]+smallsize+bigsize, mp[1]+bigsize+smallsize)
-        self.positions['outdelta'] = (mp[0]+smallsize+bigsize, mp[1]+bigsize, mp[0]+2*smallsize+bigsize, mp[1]+bigsize+smallsize)
+        self.positions['logit'] = (*mp, mp[0]+self.smallsize, mp[1]+self.bigsize)
+        self.positions['activation'] = (mp[0]+self.smallsize, mp[1], mp[0]+self.bigsize+2*self.smallsize, mp[1]+self.bigsize)
+        self.positions['indelta'] = (mp[0], mp[1]+self.bigsize, mp[0]+self.smallsize, mp[1]+self.bigsize+self.smallsize)
+        self.positions['_derivative'] = (mp[0]+self.smallsize, mp[1]+self.bigsize, mp[0]+self.smallsize+self.bigsize, mp[1]+self.bigsize+self.smallsize)
+        self.positions['outdelta'] = (mp[0]+self.smallsize+self.bigsize, mp[1]+self.bigsize, mp[0]+2*self.smallsize+self.bigsize, mp[1]+self.bigsize+self.smallsize)
         if isinstance(self.unit(), OutputUnit):
-            self.positions['target'] = (mp[0]+bigsize+2*smallsize, mp[1], mp[0]+bigsize+3*smallsize, mp[0]+bigsize+smallsize)
-            self.positions['cost_val'] = (mp[0], mp[1]+smallsize+bigsize, mp[0]+bigsize+3*smallsize, mp[0]+bigsize+2*smallsize)
+            self.positions['target'] = (mp[0]+self.bigsize+2*self.smallsize, mp[1], mp[0]+self.bigsize+3*self.smallsize, mp[0]+self.bigsize+self.smallsize)
+            self.positions['cost_val'] = (mp[0], mp[1]+self.smallsize+self.bigsize, mp[0]+self.bigsize+3*self.smallsize, mp[0]+self.bigsize+2*self.smallsize)
     def gen_graphic(self):
         self.ids = dict([(key, self.canvas.create_rectangle(*(self.positions[key]),
                 fill=tocolor(0, 0, 1))) for key in self.positions.keys()])
