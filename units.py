@@ -167,59 +167,6 @@ class Unit:
     def register(self, input_unit, input_weight):
         self.incoming_units.append(input_unit)
         self.incoming_weights.append(input_weight)
-    """
-    def remove_weight(self, weight):
-        if weight in self.weights:
-            removefrom = self.weights.index(weight)
-            self._remove_index(removefrom, autoremove=False) #keep from recursion - weight.delete calls this
-    
-    def remove_output(self, output):
-        if output in self.outputs:
-            removefrom = self.outputs.index(output)
-            self._remove_index(removefrom, False)
-    
-    def _remove_index(self, removefrom, autoremove=True):
-        self.outputs[removefrom].deregister(self, self.weights[removefrom], autoremove)
-        print("HI {}".format(removefrom))
-        del self.outputs[removefrom]
-        del self.weights[removefrom]
-    
-    
-    def deregister(self, input_unit, input_weight, autoremove=True):
-        if input_unit in self.incoming_units and input_weight in self.incoming_weights:
-            print("removing {} with autoremove={}".format(input_weight, autoremove))
-            self.incoming_units.remove(input_unit)
-            self.incoming_weights.remove(input_weight)
-            if autoremove:
-                input_weight.delete()
-    
-    def remove_weight(self, weight):
-        #only the unit that has this weight as output should remove it
-        #if someone calls on this weight to be deleted, delete this weight from the unit holding it and the unit it is going to
-        #Assume it will delete it from itself, so we don't need to call it's delete.
-        """
-    
-    """def remove_outgoing_unit(self, unit): #this is all a unit needs its incoming units to call on it if it is destroying itself
-        #Remove an output to this unit
-        #and remove the connection to it
-        if unit in self.outputs:
-            index = self.outputs.index(unit)
-            self.outputs[index].remove_incoming_unit(self)
-            self.weights[index].delete() #this should call remove_outgoing_unit for said weight
-            del self.outputs[index]
-    def remove_outgoing_weight(self, weight): #this is all a weight needs to call from its starting unit if it is destroying itself
-        if weight in self.weights:
-            index = self.weights.index(weight)
-            self.outputs[index].remove_incoming_weight(weight)
-            del self.weights[index]
-    def remove_incoming_weight(self, weight):
-        if weight in self.incoming_weights:
-            index = self.incoming_weights.index(weight)
-            del self.weights[index]
-    def remove_incoming_unit(self, unit): #this is all a unit needs its output units to call on it if it is destroying itself
-        if unit in self.incoming_units:
-            index = self.incoming_units.index(unit)
-            del self.incoming_units[index]"""
     
     #deleting weights removes the references its units have to each other and it, then destroys itself
     #deleting a unit deletes all the weights going into the unit and all of the weights going out of the unit
@@ -233,7 +180,6 @@ class Unit:
             del self.outputs[index]#remove the output unit from this unit
             del self.weights[index]#remove the connecting weight from this unit
     
-    #this should only be used carefully
     def remove_output(self, unit):
         if unit in self.outputs:
             index = self.outputs.index(unit)

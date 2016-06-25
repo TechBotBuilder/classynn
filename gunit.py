@@ -79,8 +79,8 @@ class Watchable:
                 if self.watcher().parts[name].get() != value.__name__:
                     self.watcher().parts[name].set(value.__name__)
             else:
-                if self.watcher().parts[name].get() != value:#if it doesn't already know what's happening
-                    self.watcher().parts[name].set(value)#let the watcher know what's happening
+                if self.watcher().parts[name].get() != value: #if it doesn't already know what's happening
+                    self.watcher().parts[name].set(value) #let the watcher know what's happening
     def highlight(self):
         pass
     def dehighlight(self):
@@ -92,7 +92,7 @@ class Watchable:
 
 class ConnectionGraphic(Frame):
     def __init__(self, con, canvas, startpos, endpos):
-        self._c = con
+        self._c = con #create a circular reference so we don't get garbage collected
         self.canvas = canvas
         self.ids = {'value': self.canvas.create_line(*startpos, *endpos, fill='black', width=5, stipple='gray25')}
         for part in self.ids:
@@ -102,7 +102,7 @@ class ConnectionGraphic(Frame):
     def remove(self):
         for part in self.ids:
             self.canvas.delete(self.ids[part])
-        del self._c
+        del self._c #remove circular reference, so we can be garbage collected
 
 class GConnection(Connection, Watchable):
     def __init__(self, canvas, startunit, endunit, *args, **kwargs):
@@ -135,7 +135,7 @@ class GConnection(Connection, Watchable):
 
 class UnitGraphic(Frame):
     def __init__(self, unit, canvas, position):
-        self._u = unit
+        self._u = unit #create a circular reference so unit objects are not deleted
         self.unit = weakref.ref(unit)
         self.canvas = canvas
         self.positions = {}
@@ -190,7 +190,7 @@ class UnitGraphic(Frame):
     def remove(self):
         for part in self.ids:
             self.canvas.delete(self.ids[part])
-        del self._u
+        del self._u #remove final reference to this object in the program
 
 class GUnit(Unit, Watchable):
     def __init__(self, canvas, position, *args, **kwargs):
@@ -205,7 +205,7 @@ class GUnit(Unit, Watchable):
     @position.setter
     def position(self, newposition):
         self.graphic.position = newposition
-    ##now extend things that change unit properties to update the gunit colors
+    #use __setattr__ to so that changes to unit properties update the graphic's colors
     def __setattr__(self, name, val):
         super().__setattr__(name, val)
         if name in ('logit', 'frozenlogit'):
@@ -301,11 +301,11 @@ class Watcher:
                 self.parts['cost_val'].grid_remove()
         for part in self.parts:
             if part in ('target', 'cost_val') and not isinstance(self.watched_item, OutputUnit): continue
-            self.parts[part].set(take_care_of_lists(self.watched_item.__getattribute__(part))) #load in this item's settings
+            self.parts[part].set(take_care_of_lists(self.watched_item.__getattribute__(part)))#load in this item's settings/values
     def update_display(self, name):
         def f(*args):
             if len(args) == 0:
-                val = self.parts[name].get() #in case command callback doesn't give us any new value info
+                val = self.parts[name].get() #in case command callback doesn't give us any new value info, get it
             else: val = args[0]
             self._update_display(name, val)
             if name == 'frozen': #(un)freezing changes which should be displayed;
@@ -325,14 +325,12 @@ class Watcher:
         self.watched_item = None
         disable_frame(self)
     def delete(self):
-        #remove all references to watched_item
+        #remove all references to watched_item so it can be garbage collected
         if self.watched_item:
             self.watched_item.canvas.master.startunit = None
             self.watched_item.canvas.master.clicked_on_a_unit = False
             self.watched_item.delete()
             self.clear()
-        #don't worry about connections to this unit from other units - let user remove those manually,
-        # which will also remove their starting-units' references to this object.
 
 class Checkerybutton(Checkbutton):
     def __init__(self, *args, **kwargs):
@@ -368,7 +366,6 @@ class UnitConfigFrame(Frame, Watcher):
         
         self.parts['nonlinearity'] = nonlin_selected
         
-        #Label(self, textvariable=self.parts['nonlinearity']).grid()
         self.parts['dropout'].grid(row=0)
         self.parts['frozen'].grid(row=1)
         self.parts['recurrent'].grid(row=2)
@@ -377,7 +374,6 @@ class UnitConfigFrame(Frame, Watcher):
         
         self.parts['logit'].grid(column=2, row=0)
         self.parts['frozenlogit'].grid(column=2, row=1)
-        #self.parts['hidden_state'].grid(column=2, row=2)
         self.parts['output'].grid(column=2, row=2)
         
         self.parts['delta'].grid(column=3, row=0)
@@ -413,7 +409,7 @@ class ConnectionConfigFrame(Frame, Watcher):
         self.deletebutton.grid(column=2, row=0, rowspan=3)
 
 class RunFrame(Frame):
-    time_delta = 10 #milliseconds
+    time_delta = 10 #in milliseconds
     def __init__(self, master, canvas):
         super().__init__(master)
         self.canvas = canvas
@@ -465,11 +461,8 @@ class RunFrame(Frame):
     def find_intersecting(self):
         if self.selected.get() in ('forward', 'backprop'):
             overlap=set(self.canvas.find_overlapping(*self.canvas.bbox(self.line)))
-            #print("Overlap: {}".format(overlap))
             units = set(self.canvas.find_withtag('unit'))
-            #print("Units: {}".format(units))
             already=set(self.canvas.find_withtag(self.selected.get() + '_done'))
-            #print("Already: {}".format(already))
             chosen_units = (overlap & units) - already
         else:
             chosen_units = set()
@@ -491,7 +484,6 @@ class App(Frame):
         self.canvas = Canvas(self, bg='white')
         self.runner = RunFrame(self, self.canvas)
         
-        #See http://stackoverflow.com/a/7734187 to make scrollbars
         self.canvas.pack(side=TOP, fill=BOTH, expand=True)
         self.canvas.bind("<Button-1>", self.addunit)
         self.master.bind("q", lambda e: self.master.destroy())
@@ -511,7 +503,6 @@ class App(Frame):
         Label(master=self, height=0, justify=LEFT, anchor=W, textvariable=self.message, bg='gray', relief=SUNKEN).pack(side=BOTTOM, fill=X)
         self.message.set("Starting...")
         
-        #default internal values
         self.startunit = None
         self.clicked_on_a_unit = False #See http://stackoverflow.com/a/14480311 - both canvas and unit callbacks were firing
         self.clicked_on_a_connection = False
@@ -564,4 +555,3 @@ if __name__ == '__main__':
     app = App(root)
     root.mainloop()
 
-#end
