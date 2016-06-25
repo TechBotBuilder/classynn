@@ -90,7 +90,7 @@ class Watchable:
             self.watcher().clear()
         self.graphic.remove()
 
-class ConnectionGraphic:
+class ConnectionGraphic(Frame):
     def __init__(self, con, canvas, startpos, endpos):
         self._c = con
         self.canvas = canvas
@@ -100,20 +100,22 @@ class ConnectionGraphic:
     def recolor(self, what, value, minval=None, maxval=None):
         self.canvas.itemconfig(self.ids[what], fill=tocolor(value, minval, maxval))
     def remove(self):
-        #assume only one unit has coords starting at same position as this
-        #and that only one unit has coords at the ending position
-        pos = self.canvas.coords(self.ids['value'])
-        
         for part in self.ids:
             self.canvas.delete(self.ids[part])
         del self._c
 
 class GConnection(Connection, Watchable):
-    def __init__(self, canvas, startpos, endpos, *args, **kwargs):
+    def __init__(self, canvas, startunit, endunit, *args, **kwargs):
+        if 'startpos' not in kwargs:
+            startpos = startunit.position
+        if 'endpos' not in kwargs:
+            endpos = endunit.position
         print("Adding connection from {} to {}.".format(startpos, endpos))
         self.graphic = ConnectionGraphic(self, canvas, startpos, endpos)
         self.canvas = canvas
         super().__init__(*args, **kwargs)
+        self.startunit = startunit
+        self.endunit = endunit
     @property
     def value(self):
         return super().value
@@ -128,6 +130,7 @@ class GConnection(Connection, Watchable):
         for part in self.graphic.ids:
             self.canvas.itemconfig(self.graphic.ids[part], width=5, stipple='gray25')
     def delete(self):
+        self.startunit.remove_outgoing_weight(self)
         self.remove()
 
 class UnitGraphic(Frame):
@@ -216,7 +219,7 @@ class GUnit(Unit, Watchable):
         elif name == 'recurrent':
             if bool(val): #if we're making it recurrent
                 if not self in self.outputs: #make sure we aren't already
-                    super().add_output(self, GConnection(self.canvas, (self.position[0], self.position[1]+5), (self.position[0]+20, self.position[1]+5)))
+                    super().add_output(self, GConnection(self.canvas, self, self, startpos=(self.position[0], self.position[1]+5), endpos=(self.position[0]+20, self.position[1]+5)))
             else: #if we're taking away recurrency / init saying we don't have it
                 self.remove_output(self)
     def highlight(self):
@@ -227,16 +230,17 @@ class GUnit(Unit, Watchable):
             self.canvas.itemconfig(self.graphic.ids[part], outline='black', width=1)
     def add_output(self, output, weight=None, weight_val=None):
         if weight is None or not isinstance(weight, GConnection):
-            weight = GConnection(self.canvas, self.position, output.position)
+            weight = GConnection(self.canvas, self, output)
         if weight_val is not None:
             weight.value = weight_val
         super().add_output(output, weight)
     def delete(self):
-        for unit, weight in zip(self.incoming_units, self.incoming_weights):
-            unit.remove_output(self)
-            self.deregister(unit, weight)
-        for unit in self.outputs:
-            self.remove_output(unit)
+        while len(self.incoming_weights) > 0:
+            weight = self.incoming_weights[0]
+            weight.delete()
+        while len(self.weights) > 0:
+            weight = self.weights[0]
+            weight.delete()
         self.remove()
 
 class GInputUnit(GUnit, InputUnit):
@@ -540,13 +544,9 @@ class App(Frame):
             return
         self.clicked_on_a_unit = True
         self.unitconfig.show(targetunitref())
-        print("Outputs:  {}".format(targetunitref().outputs))
-        print("Weights:  {}".format(targetunitref().weights))
-        print("Inputs:   {}".format(targetunitref().incoming_units))
-        print("Inweights:{}".format(targetunitref().incoming_weights))
         if self.startunit: #we already have a unit to start with
             if self.startunit is targetunitref(): self.startunit.recurrent=True
-            else: self.startunit.add_output(targetunitref(), GConnection(self.canvas, self.startunit.position, targetunitref().position))
+            else: self.startunit.add_output(targetunitref(), GConnection(self.canvas, self.startunit, targetunitref()))
             self.startunit = None
         self.startunit = targetunitref()
     def configconnection(self, connectionref):
