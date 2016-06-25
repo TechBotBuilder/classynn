@@ -6,6 +6,9 @@ import nonlinearities as nl
 
 MAXVAL = Connection.max_magnitude
 
+def prettify(varname):
+    return varname.replace('_', ' ').strip().title()
+
 def disable_frame(frame):
     frame.pack_forget()
 def enable_frame(frame):
@@ -375,13 +378,13 @@ class UnitConfigFrame(Frame, Watcher):
         self.parts['dropout'] = Scale(master=self, from_=0, to=1)
         for part in numberparts:
             self.parts[part] = Scale(master=self, from_=-MAXVAL, to=MAXVAL)
-        for part in self.parts: self.parts[part].config(resolution=-1, label=part, orient=HORIZONTAL, digits=4)
+        for part in self.parts: self.parts[part].config(resolution=-1, label=prettify(part), orient=HORIZONTAL, digits=4)
         for part in booleanparts:
-            self.parts[part] = Checkerybutton(master=self, text=part, variable=IntVar())
+            self.parts[part] = Checkerybutton(master=self, text=prettify(part), variable=IntVar())
         self.functions_holder = Frame(self)
         nonlin_selected = StringVar()
         for functionname in nl.possible_nonlinearities:
-            Radiobutton(self.functions_holder, text=functionname, variable=nonlin_selected,
+            Radiobutton(self.functions_holder, text=prettify(functionname), variable=nonlin_selected,
                         value=functionname, command=self.update_display('nonlinearity')).pack()
         for part in self.parts:
             self.parts[part].config(command=self.update_display(part))
@@ -430,7 +433,7 @@ class ConnectionConfigFrame(Frame, Watcher):
         for part in typebparts:
             self.parts[part] = Scale(master=self, from_=0, to=1)
         for part in self.parts:
-            self.parts[part].config(resolution=-1, label=part, orient=HORIZONTAL, digits=4, command=self.update_display(part))
+            self.parts[part].config(resolution=-1, label=prettify(part), orient=HORIZONTAL, digits=4, command=self.update_display(part))
         
         self.parts['value'].grid(row=0, column=0)
         self.parts['plasticity'].grid(row=0, column=1)
