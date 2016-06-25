@@ -320,7 +320,6 @@ class Watcher:
         for part in self.parts:
             if part in ('target', 'cost_val') and not isinstance(self.watched_item, OutputUnit): continue
             self.parts[part].set(take_care_of_lists(self.watched_item.__getattribute__(part)))#load in this item's settings/values
-        self.recalc_bounds()
     def update_display(self, name):
         def f(*args):
             if len(args) == 0:
@@ -406,6 +405,9 @@ class UnitConfigFrame(Frame, Watcher):
         self.parts['target'].grid(column=4, row=0)
         self.parts['cost_val'].grid(column=4, row=1)
         self.deletebutton.grid(column=4, row=2)
+    def show(self, newUnit):
+        super().show(newUnit)
+        self.recalc_bounds()
     def recalc_bounds(self):
         new_nonlin = nl.possible_nonlinearities[self.parts['nonlinearity'].get()]
         low = new_nonlin[2]
@@ -430,14 +432,14 @@ class ConnectionConfigFrame(Frame, Watcher):
         for part in self.parts:
             self.parts[part].config(resolution=-1, label=part, orient=HORIZONTAL, digits=4, command=self.update_display(part))
         
-        self.parts['value'].grid(row=0, columnspan=2)
-        self.parts['plasticity'].grid(row=1)
-        self.parts['momentum'].grid(row=2)
-        self.parts['decay'].grid(row=3)
-        self.parts['moment'].grid(row=1, column=1)
-        self.parts['delta_accumulator'].grid(row=2, column=1)
-        self.parts['previous_delta'].grid(row=3, column=1)
-        self.deletebutton.grid(column=2, row=0, rowspan=3)
+        self.parts['value'].grid(row=0, column=0)
+        self.parts['plasticity'].grid(row=0, column=1)
+        self.parts['momentum'].grid(row=0, column=2)
+        self.parts['decay'].grid(row=0, column=3)
+        self.parts['moment'].grid(row=1, column=0)
+        self.parts['delta_accumulator'].grid(row=1, column=1)
+        self.parts['previous_delta'].grid(row=1, column=2)
+        self.deletebutton.grid(column=3, row=1)
 
 class RunFrame(Frame):
     time_delta = 10 #in milliseconds
@@ -468,7 +470,7 @@ class RunFrame(Frame):
     def update_position(self):
         command = self.selected.get()
         if command != self.previous_command:
-            MessageDisplay.set("Now {}ing".format(command))
+            MessageDisplay.set("Now {}-ing".format(command))
             self.previous_command = command
         if command == 'pause':
             self.after(200, self.update_position)
@@ -552,6 +554,7 @@ class App(Frame):
             self.clicked_on_a_connection = False
             return
         #If we get to this point, we should reset our selection because we clicked on an empty area of the canvas
+        MessageDisplay.set("")
         if self.startunit:
             self.unitconfig.clear()
             self.startunit = None
