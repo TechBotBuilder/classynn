@@ -2,27 +2,9 @@ from tkinter import *
 from units import Unit, InputUnit, OutputUnit
 from units import Connection
 import weakref
+import nonlinearities as nl
 
 MAXVAL = Connection.max_magnitude
-
-#predefine some nonlinearities for people to use:
-#remember derivatives are based on outputs - so y=sigmoid(x) -> dy/dx = y*(1-y)
-from math import exp
-def sigmoid(x): return 1/(1+exp(-x))
-def dsigmoid(y): return y*(1-y)
-
-from math import tanh
-def dtanh(y): return 1 - y**2
-
-def linear(x): return x
-def dlinear(y): return 1
-
-def rectified_linear(x): return max(0, x)
-def drectified_linear(y): return int(y != 0)
-
-possible_nonlinearities = {'sigmoid': (sigmoid, dsigmoid), 'tanh': (tanh, dtanh),
-    'linear': (linear, dlinear), 'rectified_linear': (rectified_linear, drectified_linear)}
-
 
 def disable_frame(frame):
     frame.pack_forget()
@@ -316,8 +298,8 @@ class Watcher:
     def _update_display(self, name, value):
         if self.watched_item:
             if name == 'nonlinearity':
-                setattr(self.watched_item, name, possible_nonlinearities[value][0])
-                setattr(self.watched_item, 'nonlinearity_deriv', possible_nonlinearities[value][1])
+                setattr(self.watched_item, name, nl.possible_nonlinearities[value][0])
+                setattr(self.watched_item, 'nonlinearity_deriv', nl.possible_nonlinearities[value][1])
             else: setattr(self.watched_item, name, float(value))
     def clear(self):
         if self.watched_item:
@@ -359,8 +341,9 @@ class UnitConfigFrame(Frame, Watcher):
             self.parts[part] = Checkerybutton(master=self, text=part, variable=IntVar())
         self.functions_holder = Frame(self)
         nonlin_selected = StringVar()
-        for nl in possible_nonlinearities:
-            Radiobutton(self.functions_holder, text=nl, variable=nonlin_selected, value=nl, command=self.update_display('nonlinearity')).pack()
+        for functionname in nl.possible_nonlinearities:
+            Radiobutton(self.functions_holder, text=functionname, variable=nonlin_selected,
+                        value=functionname, command=self.update_display('nonlinearity')).pack()
         for part in self.parts:
             self.parts[part].config(command=self.update_display(part))
         

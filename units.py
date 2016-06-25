@@ -1,9 +1,6 @@
 import numpy as np
 from math import exp
-def sigmoid(x): return 1/(1+exp(-x))
-
-def linear(x): return x
-def dlinear(y): return 1
+from nonlinearities import possible_nonlinearities as nonlins
 
 class Connection:
     max_magnitude = 10
@@ -59,16 +56,11 @@ class Connection:
     def value(self, newvalue):
         self._value = newvalue
 
-def dsigmoid(x, fromLogit=False):
-    if fromLogit:
-        x = sigmoid(x)
-    return x * (1.0-x)
-
 class Unit:
     """
     - Unit constructor
     """
-    def __init__(self, outputs=[], nonlinearity=sigmoid, nonlinearity_deriv=dsigmoid, dropout=0.0, recurrent=False):
+    def __init__(self, outputs=[], nonlinearity=nonlins['sigmoid'][0], nonlinearity_deriv=nonlins['sigmoid'][1], dropout=0, recurrent=False):
         self.incoming_units = []
         self.incoming_weights = []
         self.outputs = []
@@ -186,10 +178,10 @@ class Unit:
             self.remove_outgoing_weight(self.weights[index])
 
 class Group:
-    def __init__(self, size, outputs, nonlinearity=sigmoid, nonlinearity_deriv=dsigmoid, dropout=0.0, self_recurrent=False, recurrent_interconnected=False):
+    def __init__(self, size, recurrent_interconnected=False, *args, **kwargs):
         self.units = []
         for unitID in range(size):
-            self.units.append(Unit(outputs, nonlinearity, nonlinearity_deriv, dropout, self_recurrent))
+            self.units.append(Unit(outputs, *args, **kwargs))
         if recurrent_interconnected:
             for unit in self.units:
                 for unit2 in self.units:
@@ -226,7 +218,7 @@ class Group:
 
 class InputUnit(Unit):
     def __init__(self, outputs=[], *args, **kwargs):
-        super().__init__(outputs, linear, dlinear, *args, **kwargs)
+        super().__init__(outputs, *nonlins['linear'], *args, **kwargs)
     def update(self, value):
         self.logit = value
 
@@ -261,10 +253,10 @@ class OutputUnit(Unit):
         return cost_val
 
 class OutputGroup(Group):
-    def __init__(self, size, nonlinearity, nonlinearity_deriv, cost_function, cost_derivative, dropout=0):
+    def __init__(self, size, *args, **kwargs):
         self.units = []
         for unitID in range(size):
-            self.units.append(OutputUnit(nonlinearity, nonlinearity_deriv, cost_function, cost_derivative, dropout))
+            self.units.append(OutputUnit(*args, **kwargs))
     def cost(self, targets):
         cost_val = 0
         for unit, target in zip(self.units, targets):
