@@ -232,7 +232,7 @@ class GUnit(Unit, Watchable):
         elif name == 'recurrent':
             if bool(val): #if we're making it recurrent
                 if not self in self.outputs: #make sure we aren't already
-                    super().add_output(self, GConnection(self.canvas, self, self, startpos=(self.position[0], self.position[1]+5), endpos=(self.position[0]+20, self.position[1]+5)))
+                    self.add_output(self, GConnection(self.canvas, self, self))
             else: #if we're taking away recurrency / init saying we don't have it
                 self.remove_output(self)
     def highlight(self):
@@ -560,7 +560,7 @@ class App(Frame):
         self.clicked_on_a_unit = True
         self.unitconfig.show(targetunitref())
         if self.startunit: #we already have a unit to start with
-            if self.startunit is targetunitref(): self.startunit.recurrent=True
+            if self.startunit is targetunitref(): self.startunit.recurrent=not self.startunit.recurrent
             else: self.startunit.add_output(targetunitref(), GConnection(self.canvas, self.startunit, targetunitref()))
             self.startunit = None
         self.startunit = targetunitref()

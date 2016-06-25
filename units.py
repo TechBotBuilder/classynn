@@ -181,7 +181,7 @@ class Unit:
     def remove_output(self, unit):
         if unit in self.outputs:
             index = self.outputs.index(unit)
-            self.remove_outgoing_weight(self.weights[index])
+            self.weights[index].delete()
 
 class Group:
     def __init__(self, size, recurrent_interconnected=False, *args, **kwargs):
