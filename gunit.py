@@ -153,12 +153,28 @@ class UnitGraphic(Frame):
         if isinstance(self.unit(), OutputUnit):
             self.positions['target'] = (mp[0]+self.bigsize+2*self.smallsize, mp[1], mp[0]+self.bigsize+3*self.smallsize, mp[0]+self.bigsize+self.smallsize)
             self.positions['cost_val'] = (mp[0], mp[1]+self.smallsize+self.bigsize, mp[0]+self.bigsize+3*self.smallsize, mp[0]+self.bigsize+2*self.smallsize)
+        if isinstance(self.unit(), InputUnit):
+            self.positions['logit'] = (
+                    mp[0]-self.smallsize, mp[1],
+                    mp[0]+self.smallsize, mp[1],
+                    mp[0]+self.smallsize, mp[1]+self.bigsize,
+                    mp[0], mp[1]+self.bigsize,
+                    mp[0], mp[1]+self.bigsize+self.smallsize,
+                    mp[0]-self.smallsize, mp[1]+self.bigsize+self.smallsize)
     def gen_graphic(self):
-        self.ids = dict([(key, self.canvas.create_rectangle(*(self.positions[key]),
-                fill=tocolor(0, 0, 1))) for key in self.positions.keys()])
+        self.ids = {}
+        for key in self.positions.keys():
+            if key=='logit' and isinstance(self.unit(), InputUnit):
+                self.ids['logit'] = self.canvas.create_polygon(*self.positions['logit'], fill=tocolor(0,0,1), outline='black', width=1)
+            else:
+                self.ids[key] = self.canvas.create_rectangle(*(self.positions[key]), fill=tocolor(0, 0, 1))
     @property
     def position(self):
-        return self.canvas.bbox(self.ids['logit'])[:2]
+        pos = self.canvas.bbox(self.ids['logit'])[:2]
+        if isinstance(self.unit(), InputUnit):
+            return (pos[0]+self.smallsize, pos[1])
+        else:
+            return pos
     @position.setter
     def position(self, newposition):
         self.find_bounds(newposition)
