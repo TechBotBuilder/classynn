@@ -88,18 +88,25 @@ class Watchable:
     def remove(self):
         if self.watcher and self.watcher():
             self.watcher().clear()
+        self.graphic.remove()
 
 class ConnectionGraphic:
     def __init__(self, con, canvas, startpos, endpos):
+        self._c = con
         self.canvas = canvas
         self.ids = {'value': self.canvas.create_line(*startpos, *endpos, fill='black', width=5, stipple='gray25')}
         for part in self.ids:
-            self.canvas.tag_bind(self.ids[part], "<Button-1>", self.canvas.master.configconnection(con))
+            self.canvas.tag_bind(self.ids[part], "<Button-1>", self.canvas.master.configconnection(weakref.ref(con)))
     def recolor(self, what, value, minval=None, maxval=None):
         self.canvas.itemconfig(self.ids[what], fill=tocolor(value, minval, maxval))
     def remove(self):
+        #assume only one unit has coords starting at same position as this
+        #and that only one unit has coords at the ending position
+        pos = self.canvas.coords(self.ids['value'])
+        
         for part in self.ids:
             self.canvas.delete(self.ids[part])
+        del self._c
 
 class GConnection(Connection, Watchable):
     def __init__(self, canvas, startpos, endpos, *args, **kwargs):
@@ -120,9 +127,12 @@ class GConnection(Connection, Watchable):
     def dehighlight(self):
         for part in self.graphic.ids:
             self.canvas.itemconfig(self.graphic.ids[part], width=5, stipple='gray25')
+    def delete(self):
+        self.remove()
 
 class UnitGraphic(Frame):
     def __init__(self, unit, canvas, position):
+        self._u = unit
         self.unit = weakref.ref(unit)
         self.canvas = canvas
         self.positions = {}
@@ -130,7 +140,7 @@ class UnitGraphic(Frame):
         self.gen_graphic()
         self.canvas.addtag_withtag('unit', self.ids['_derivative'])
         for piece in self.ids:
-            self.canvas.tag_bind(self.ids[piece], "<Button-1>", self.canvas.master.addconnection(unit))
+            self.canvas.tag_bind(self.ids[piece], "<Button-1>", self.canvas.master.addconnection(self.unit))
         super().__init__(master=canvas, width=0, height=0)
         self.checktags()
     def find_bounds(self, mainposition):
@@ -142,6 +152,9 @@ class UnitGraphic(Frame):
         self.positions['indelta'] = (mp[0], mp[1]+bigsize, mp[0]+smallsize, mp[1]+bigsize+smallsize)
         self.positions['_derivative'] = (mp[0]+smallsize, mp[1]+bigsize, mp[0]+smallsize+bigsize, mp[1]+bigsize+smallsize)
         self.positions['outdelta'] = (mp[0]+smallsize+bigsize, mp[1]+bigsize, mp[0]+2*smallsize+bigsize, mp[1]+bigsize+smallsize)
+        if isinstance(self.unit(), OutputUnit):
+            self.positions['target'] = (mp[0]+bigsize+2*smallsize, mp[1], mp[0]+bigsize+3*smallsize, mp[0]+bigsize+smallsize)
+            self.positions['cost_val'] = (mp[0], mp[1]+smallsize+bigsize, mp[0]+bigsize+3*smallsize, mp[0]+bigsize+2*smallsize)
     def gen_graphic(self):
         self.ids = dict([(key, self.canvas.create_rectangle(*(self.positions[key]),
                 fill=tocolor(0, 0, 1))) for key in self.positions.keys()])
@@ -160,18 +173,21 @@ class UnitGraphic(Frame):
         if 'forward' in tags and 'forward_done' not in tags:
             self.unit().go()
             self.canvas.addtag_withtag('forward_done', self.ids['_derivative'])
-        elif 'backprop' in tags and 'backprop_done' not in tags:
+        if 'backprop' in tags and 'backprop_done' not in tags:
             self.unit().backprop()
             self.canvas.addtag_withtag('backprop_done', self.ids['_derivative'])
-        elif 'reset' in tags:
+        if 'reset' in tags:
             self.unit().reset()
             self.cleartags()
+        if 'remove' in tags:
+            self._u.delete()
         self.after(20, self.checktags)
     def cleartags(self):
         self.canvas.itemconfig(self.ids['_derivative'], tags='unit')
     def remove(self):
         for part in self.ids:
             self.canvas.delete(self.ids[part])
+        del self._u
 
 class GUnit(Unit, Watchable):
     def __init__(self, canvas, position, *args, **kwargs):
@@ -180,7 +196,6 @@ class GUnit(Unit, Watchable):
         self.graphic = UnitGraphic(self, canvas, position)
         self.position = position
         super().__init__(*args, **kwargs)
-        self.weights = [GConnection() for weight in self.weights]
     @property
     def position(self):
         return self.graphic.position
@@ -196,24 +211,33 @@ class GUnit(Unit, Watchable):
             self.graphic.recolor('activation', self.output)
         elif name == 'delta':
             self.graphic.recolor('indelta', self.delta)
-        elif name in ('_derivative', 'outdelta'):
+        elif name in ('_derivative', 'outdelta', 'target', 'cost_val'):
             self.graphic.recolor(name, val)
         elif name == 'recurrent':
             if bool(val): #if we're making it recurrent
                 if not self in self.outputs: #make sure we aren't already
                     super().add_output(self, GConnection(self.canvas, (self.position[0], self.position[1]+5), (self.position[0]+20, self.position[1]+5)))
             else: #if we're taking away recurrency / init saying we don't have it
-                if self in self.outputs: #make sure we really are taking it away
-                    removefrom = self.outputs.index(self)
-                    del self.outputs[removefrom]
-                    self.weights[removefrom].graphic.remove()
-                    del self.weights[removefrom]
+                self.remove_output(self)
     def highlight(self):
         for part in self.graphic.ids:
             self.canvas.itemconfig(self.graphic.ids[part], outline='yellow', width=3)
     def dehighlight(self):
         for part in self.graphic.ids:
             self.canvas.itemconfig(self.graphic.ids[part], outline='black', width=1)
+    def add_output(self, output, weight=None, weight_val=None):
+        if weight is None or not isinstance(weight, GConnection):
+            weight = GConnection(self.canvas, self.position, output.position)
+        if weight_val is not None:
+            weight.value = weight_val
+        super().add_output(output, weight)
+    def delete(self):
+        for unit, weight in zip(self.incoming_units, self.incoming_weights):
+            unit.remove_output(self)
+            self.deregister(unit, weight)
+        for unit in self.outputs:
+            self.remove_output(unit)
+        self.remove()
 
 class GInputUnit(GUnit, InputUnit):
     def __init__(self, canvas, position, *args, **kwargs):
@@ -233,11 +257,13 @@ class GOutputUnit(GUnit, OutputUnit):
         GUnit.__init__(self, canvas, position)
         OutputUnit.__init__(self, *args, **kwargs)
         self.target = 0
+        self.cost_val = 0
     def backprop(self):
-        super().cost(self.target)
+        self.cost_val = super().cost(self.target)
     def reset(self):
         target = self.target
         super().reset()
+        self.cost_val = 0
         self.target = target
 
 class OptionsFrame(Frame):
@@ -263,10 +289,14 @@ class Watcher:
         self.watched_item.watcher = self #tell new watched item that it is being watched
         enable_frame(self)
         if isinstance(self.watched_item, Unit):
-            if isinstance(self.watched_item, OutputUnit): self.parts['target'].grid()
-            else: self.parts['target'].grid_remove()
+            if isinstance(self.watched_item, OutputUnit):
+                self.parts['target'].grid()
+                self.parts['cost_val'].grid()
+            else:
+                self.parts['target'].grid_remove()
+                self.parts['cost_val'].grid_remove()
         for part in self.parts:
-            if part=='target' and not isinstance(self.watched_item, OutputUnit): continue
+            if part in ('target', 'cost_val') and not isinstance(self.watched_item, OutputUnit): continue
             self.parts[part].set(take_care_of_lists(self.watched_item.__getattribute__(part))) #load in this item's settings
     def update_display(self, name):
         def f(*args):
@@ -288,19 +318,17 @@ class Watcher:
     def clear(self):
         if self.watched_item:
             self.watched_item.watcher = None #tell previous item that it is no longer being watched
-            self.watched_item = None
+        self.watched_item = None
         disable_frame(self)
     def delete(self):
         #remove all references to watched_item
         if self.watched_item:
             self.watched_item.canvas.master.startunit = None
             self.watched_item.canvas.master.clicked_on_a_unit = False
-            self.watched_item.remove()
+            self.watched_item.delete()
+            self.clear()
         #don't worry about connections to this unit from other units - let user remove those manually,
         # which will also remove their starting-units' references to this object.
-    def set_target(self, val):
-        if self.watched_item and isinstance(self.watched_item, OutputUnit):
-            self.watched_item.target = float(val)
 
 class Checkerybutton(Checkbutton):
     def __init__(self, *args, **kwargs):
@@ -319,7 +347,7 @@ class UnitConfigFrame(Frame, Watcher):
         Watcher.__init__(self)
         self.pack(side=LEFT, fill=X, expand=True)
         self.parts = {}
-        numberparts = ['logit', 'frozenlogit', 'delta', 'output', 'outdelta', '_derivative']
+        numberparts = ['logit', 'frozenlogit', 'delta', 'output', 'outdelta', '_derivative', 'target', 'cost_val']
         booleanparts = ['frozen', 'recurrent']
         self.parts['dropout'] = Scale(master=self, from_=0, to=1)
         for part in numberparts:
@@ -335,8 +363,6 @@ class UnitConfigFrame(Frame, Watcher):
             self.parts[part].config(command=self.update_display(part))
         
         self.parts['nonlinearity'] = nonlin_selected
-        
-        self.parts['target'] = Scale(master=self, from_=-MAXVAL, to=MAXVAL, label='Target value', command=self.set_target)
         
         #Label(self, textvariable=self.parts['nonlinearity']).grid()
         self.parts['dropout'].grid(row=0)
@@ -354,7 +380,8 @@ class UnitConfigFrame(Frame, Watcher):
         self.parts['_derivative'].grid(column=3, row=1)
         self.parts['outdelta'].grid(column=3, row=2)
         
-        self.parts['target'].grid(column=4, row=0, rowspan=2)
+        self.parts['target'].grid(column=4, row=0)
+        self.parts['cost_val'].grid(column=4, row=1)
         self.deletebutton.grid(column=4, row=2)
 
 class ConnectionConfigFrame(Frame, Watcher):
@@ -506,24 +533,28 @@ class App(Frame):
                 GInputUnit(self.canvas, (event.x, event.y), [])
             elif self.options.unit_type == 'output':
                 GOutputUnit(self.canvas, (event.x, event.y))
-    def addconnection(self, unit): #creates a method bound to each specific unit
-        return lambda event: self._addconnection(unit, event)
-    def _addconnection(self, targetunit, event): #fires when we click on a unit on the canvas
+    def addconnection(self, unitref): #creates a method bound to each specific unit
+        return lambda event: self._addconnection(unitref, event)
+    def _addconnection(self, targetunitref, event): #fires when we click on a unit on the canvas
         if self.clicked_on_a_connection:
             return
         self.clicked_on_a_unit = True
-        self.unitconfig.show(targetunit)
+        self.unitconfig.show(targetunitref())
+        print("Outputs:  {}".format(targetunitref().outputs))
+        print("Weights:  {}".format(targetunitref().weights))
+        print("Inputs:   {}".format(targetunitref().incoming_units))
+        print("Inweights:{}".format(targetunitref().incoming_weights))
         if self.startunit: #we already have a unit to start with
-            if self.startunit is targetunit: self.startunit.recurrent=True
-            else: self.startunit.add_output(targetunit, GConnection(self.canvas, self.startunit.position, targetunit.position))
+            if self.startunit is targetunitref(): self.startunit.recurrent=True
+            else: self.startunit.add_output(targetunitref(), GConnection(self.canvas, self.startunit.position, targetunitref().position))
             self.startunit = None
-        self.startunit = targetunit
-    def configconnection(self, connection):
-        return lambda event: self._configconnection(connection, event)
-    def _configconnection(self, connection, event):
+        self.startunit = targetunitref()
+    def configconnection(self, connectionref):
+        return lambda event: self._configconnection(connectionref, event)
+    def _configconnection(self, connectionref, event):
         self.startunit = None #cancel any ideas we had before about linking units
         self.clicked_on_a_connection = True
-        self.connectionconfig.show(connection)
+        self.connectionconfig.show(connectionref())
 
 
 

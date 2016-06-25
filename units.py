@@ -1,5 +1,4 @@
 import numpy as np
-#from scipy.special import expit as sigmoid
 from math import exp
 def sigmoid(x): return 1/(1+exp(-x))
 
@@ -70,7 +69,12 @@ class Unit:
     - Unit constructor
     """
     def __init__(self, outputs=[], nonlinearity=sigmoid, nonlinearity_deriv=dsigmoid, dropout=0.0, recurrent=False):
-        self.outputs = outputs
+        self.incoming_units = []
+        self.incoming_weights = []
+        self.outputs = []
+        self.weights = []
+        for output in outputs:
+            self.add_output(outputs)
         self.dropout = dropout
         self.nonlinearity = nonlinearity
         self.nonlinearity_deriv = nonlinearity_deriv
@@ -80,14 +84,12 @@ class Unit:
         self.hidden_state = []
         self.derivative = []
         self._derivative = 0
-        self.recurrent = recurrent
-        self.weights = [Connection() for output in self.outputs]
-        if self.recurrent:
-            self.outputs.append(self)
-            self.weights.append(Connection())
         self.delta = 0
         self.output = 0
         self.outdelta = 0
+        self.recurrent = recurrent
+        if self.recurrent:
+            self.add_output(self)
     
     """Move current output value along weights"""
     def send(self, target=None):
@@ -157,9 +159,35 @@ class Unit:
                 self.weights[-1] = weight
             else:
                 new_weight.value = weight
+        self.outputs[-1].register(self, self.weights[-1])
     
     def __str__(self):
         return "Unit: logit {},\thidden state: {}".format(self.logit, self.output)
+    
+    def remove_weight(self, weight):
+        if weight in self.weights:
+            removefrom = self.weights.index(weight)
+            self._remove_index(removefrom)
+    
+    def remove_output(self, output):
+        if output in self.outputs:
+            removefrom = self.outputs.index(output)
+            self._remove_index(removefrom)
+    
+    def _remove_index(self, removefrom):
+        self.outputs[removefrom].deregister(self, self.weights[removefrom])
+        del self.outputs[removefrom]
+        del self.weights[removefrom]
+    
+    def register(self, input_unit, input_weight):
+        self.incoming_units.append(input_unit)
+        self.incoming_weights.append(input_weight)
+    
+    def deregister(self, input_unit, input_weight):
+        if input_unit in self.incoming_units and input_weight in self.incoming_weights:
+            self.incoming_units.remove(input_unit)
+            self.incoming_weights.remove(input_weight)
+            input_weight.delete()
 
 class Group:
     def __init__(self, size, outputs, nonlinearity=sigmoid, nonlinearity_deriv=dsigmoid, dropout=0.0, self_recurrent=False, recurrent_interconnected=False):
@@ -170,8 +198,7 @@ class Group:
             for unit in self.units:
                 for unit2 in self.units:
                     if unit != unit2:
-                        unit.outputs.append(unit2)
-                        unit.weights.append(Connection())
+                        unit.add_output(unit2)
     def freeze(self):
         for unit in self.units:
             unit.freeze()
