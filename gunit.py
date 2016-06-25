@@ -151,8 +151,8 @@ class UnitGraphic(Frame):
         self.positions['_derivative'] = (mp[0]+self.smallsize, mp[1]+self.bigsize, mp[0]+self.smallsize+self.bigsize, mp[1]+self.bigsize+self.smallsize)
         self.positions['outdelta'] = (mp[0]+self.smallsize+self.bigsize, mp[1]+self.bigsize, mp[0]+2*self.smallsize+self.bigsize, mp[1]+self.bigsize+self.smallsize)
         if isinstance(self.unit(), OutputUnit):
-            self.positions['target'] = (mp[0]+self.bigsize+2*self.smallsize, mp[1], mp[0]+self.bigsize+3*self.smallsize, mp[0]+self.bigsize+self.smallsize)
-            self.positions['cost_val'] = (mp[0], mp[1]+self.smallsize+self.bigsize, mp[0]+self.bigsize+3*self.smallsize, mp[0]+self.bigsize+2*self.smallsize)
+            self.positions['target'] = (mp[0]+self.bigsize+2*self.smallsize, mp[1], mp[0]+self.bigsize+3*self.smallsize, mp[1]+self.bigsize+self.smallsize)
+            self.positions['cost_val'] = (mp[0], mp[1]+self.smallsize+self.bigsize, mp[0]+self.bigsize+3*self.smallsize, mp[1]+self.bigsize+2*self.smallsize)
         if isinstance(self.unit(), InputUnit):
             self.positions['logit'] = (
                     mp[0]-self.smallsize, mp[1],
