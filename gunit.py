@@ -40,6 +40,14 @@ def value_to_color(val, minval=-MAXVAL, maxval=MAXVAL):
     return "#{:02x}{:02x}{:02x}".format(int(r),int(g),int(b))
 tocolor = value_to_color
 
+class MessageDisplay:
+    @classmethod
+    def start(cls):
+        cls.message = StringVar()
+    @classmethod
+    def set(cls, newmessage):
+        cls.message.set(newmessage)
+
 class Watchable:
     def __setattr__(self, name, value):
         if not 'watcher' in self.__dict__:
@@ -68,6 +76,7 @@ class Watchable:
     def dehighlight(self):
         pass
     def remove(self):
+        MessageDisplay.set("Deleting {}".format(self))
         if self.watcher and self.watcher():
             self.watcher().clear()
         self.graphic.remove()
@@ -88,11 +97,11 @@ class ConnectionGraphic(Frame):
 
 class GConnection(Connection, Watchable):
     def __init__(self, canvas, startunit, endunit, *args, **kwargs):
-        if 'startpos' not in kwargs:
-            startpos = startunit.position
-        if 'endpos' not in kwargs:
-            endpos = endunit.position
-        print("Adding connection from {} to {}.".format(startpos, endpos))
+        if 'startpos' not in kwargs: startpos = startunit.position
+        else: startpos = kwargs['startpos']
+        if 'endpos' not in kwargs: endpos = endunit.position
+        else: endpos = kwargs['endpos']
+        MessageDisplay.set("Creating connection from {} to {}.".format(startpos, endpos))
         self.graphic = ConnectionGraphic(self, canvas, startpos, endpos)
         self.canvas = canvas
         super().__init__(*args, **kwargs)
@@ -176,7 +185,7 @@ class UnitGraphic(Frame):
 
 class GUnit(Unit, Watchable):
     def __init__(self, canvas, position, *args, **kwargs):
-        print("Adding {} unit at {}, {}".format(str(type(self)), *position))
+        MessageDisplay.set("Creating {} unit at {}".format(str(type(self).__name__), position))
         self.canvas = canvas
         self.graphic = UnitGraphic(self, canvas, position)
         self.position = position
@@ -258,9 +267,12 @@ class OptionsFrame(Frame):
         self.pack(side=LEFT)
         self._unit_type = StringVar()
         self._unit_type.set('hidden')
-        Radiobutton(self, text='Input Unit', variable=self._unit_type, value='input', indicatoron=0).pack(anchor=W)
-        Radiobutton(self, text='Hidden Unit', variable=self._unit_type, value='hidden', indicatoron=0).pack(anchor=W)
-        Radiobutton(self, text='Output Unit', variable=self._unit_type, value='output', indicatoron=0).pack(anchor=W)
+        Radiobutton(self, text='Input Unit', variable=self._unit_type, value='input',
+                    indicatoron=0, command=lambda: MessageDisplay.set("New units will be input units")).pack(anchor=W)
+        Radiobutton(self, text='Hidden Unit', variable=self._unit_type, value='hidden',
+                    indicatoron=0, command=lambda: MessageDisplay.set("New units will be hidden units")).pack(anchor=W)
+        Radiobutton(self, text='Output Unit', variable=self._unit_type, value='output',
+                    indicatoron=0, command=lambda: MessageDisplay.set("New units will be output units")).pack(anchor=W)
     @property
     def unit_type(self):
         return self._unit_type.get()
@@ -271,6 +283,7 @@ class Watcher:
         self.deletebutton = Button(master=self, text="Delete this item", command=self.delete)
     def show(self, newWatched):
         self.clear()
+        MessageDisplay.set("Now viewing/editing {}".format(newWatched))
         self.watched_item = newWatched
         self.watched_item.watcher = self #tell new watched item that it is being watched
         enable_frame(self)
@@ -307,6 +320,7 @@ class Watcher:
         self.watched_item = None
         disable_frame(self)
     def delete(self):
+        MessageDisplay.set("Deleting...")
         #remove all references to watched_item so it can be garbage collected
         if self.watched_item:
             self.watched_item.canvas.master.startunit = None
@@ -412,12 +426,16 @@ class RunFrame(Frame):
         self.autoreset.set(True)
         self.autoreset.pack(side=LEFT)
         self.pack(side=TOP, fill=X)
+        self.previous_command=self.selected.get()
         self.update_position()
     def resize_line(self, event):
         oldcoords = self.canvas.coords(self.line)
         self.canvas.coords(self.line, oldcoords[0], 0, oldcoords[2], event.height)
     def update_position(self):
         command = self.selected.get()
+        if command != self.previous_command:
+            MessageDisplay.set("Now {}ing".format(command))
+            self.previous_command = command
         if command == 'pause':
             self.after(200, self.update_position)
             return
@@ -454,6 +472,7 @@ class RunFrame(Frame):
         self.selected.set("pause")
         self.canvas.move(self.line, -self.canvas.coords(self.line)[0], 0)
         self.canvas.addtag_withtag("reset", "unit")
+        MessageDisplay.set("Reset units")
 
 class App(Frame):
     def __init__(self, master=None):
@@ -482,9 +501,9 @@ class App(Frame):
         self.unitconfig = UnitConfigFrame(self.configbar)
         disable_frame(self.unitconfig)
         
-        self.message = StringVar()
-        Label(master=self, height=0, justify=LEFT, anchor=W, textvariable=self.message, bg='gray', relief=SUNKEN).pack(side=BOTTOM, fill=X)
-        self.message.set("Starting...")
+        MessageDisplay.start()
+        Label(master=self, height=0, justify=LEFT, anchor=W, textvariable=MessageDisplay.message, bg='gray', relief=SUNKEN).pack(side=BOTTOM, fill=X)
+        MessageDisplay.set("Starting...")
         
         self.startunit = None
         self.clicked_on_a_unit = False #See http://stackoverflow.com/a/14480311 - both canvas and unit callbacks were firing
@@ -533,7 +552,6 @@ class App(Frame):
 
 
 if __name__ == '__main__':
-    print("Starting simulation...")
     root = Tk()
     app = App(root)
     root.mainloop()
