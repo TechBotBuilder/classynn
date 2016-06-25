@@ -1,10 +1,16 @@
-import numpy as np
-from math import exp
+from random import gauss
 from nonlinearities import possible_nonlinearities as nonlins
+
+def clip(value, minval, maxval):
+    return min(maxval, max(minval, value))
+def sign(value):
+    return 0 if value==0 else (-1 if value < 0 else 1)
+def randn():
+    return gauss(0, 1)
 
 class Connection:
     max_magnitude = 10
-    def __init__(self, value=np.random.randn, plasticity=0.01, momentum=0.6, decay=0):
+    def __init__(self, value=randn, plasticity=0.01, momentum=0.6, decay=0):
         if hasattr(value, '__call__'):
             self.value = value()
         else:
@@ -15,29 +21,29 @@ class Connection:
         self.decay = decay
         self.delta_accumulator = 0.0
         self.previous_delta = 0
-    def update(self, delta, commit = True, momentum = True, prop = False, adaptive_learning_rate = False, clip=True):
+    def update(self, delta, commit = True, momentum = True, prop = False, adaptive_learning_rate = False, doclip=True):
         self.delta_accumulator += delta
-        if clip:
-            self.delta_accumulator = np.clip(self.delta_accumulator, -10, 10)
+        if doclip:
+            self.delta_accumulator = clip(self.delta_accumulator, -self.max_magnitude, self.max_magnitude)
         if commit:
             if adaptive_learning_rate:
-                reduce = np.sign(self.previous_delta) != np.sign(self.previous_delta)
+                reduce = sign(self.previous_delta) != sign(self.previous_delta)
                 if reduce:
                     self.plasticity *= 0.95
                 else:
                     self.plasticity += 0.05
-                self.plasticity = np.clip(self.plasticity, -1, 1)
+                self.plasticity = clip(self.plasticity, 0, 1)
             if momentum:
                 self.value -= self.plasticity * (self.moment + self.delta_accumulator + self.decay * self.value)
                 self.moment += self.delta_accumulator
                 self.moment *= self.momentum
             elif prop:
-                self.value -= self.plasticity * np.sign(self.delta_accumulator)
+                self.value -= self.plasticity * sign(self.delta_accumulator)
             else:
                 self.value -= self.plasticity * self.delta_accumulator
             self.previous_delta = self.delta_accumulator
             self.delta_accumulator = 0
-            self.value = np.clip(self.value, -self.max_magnitude, self.max_magnitude)
+            self.value = clip(self.value, -self.max_magnitude, self.max_magnitude)
     def commit(self):
         self.update(0)
     def nesterov(self):
