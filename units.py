@@ -108,7 +108,7 @@ class Unit:
     def forward(self):
         self.output = self.nonlinearity(self.logit)
         self.hidden_state.append(self.output)
-        self._derivative = self.nonlinearity_deriv(self.logit)
+        self._derivative = self.nonlinearity_deriv(self.output)
         self.derivative.append(self._derivative)
         self.logit = 0
     
