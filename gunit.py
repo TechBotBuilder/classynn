@@ -101,10 +101,12 @@ class GConnection(Connection, Watchable):
             startpos = (startunit.position[0]+UnitGraphic.bigsize+2*UnitGraphic.smallsize, startunit.position[1])
         else:
             startpos = kwargs['startpos']
+            del kwargs['startpos']
         if 'endpos' not in kwargs:
             endpos = endunit.position
         else:
             endpos = kwargs['endpos']
+            del kwargs['endpos']
         MessageDisplay.set("Creating connection from {} to {}.".format(startpos, endpos))
         self.graphic = ConnectionGraphic(self, canvas, startpos, endpos)
         self.canvas = canvas
