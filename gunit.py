@@ -85,19 +85,25 @@ class Watchable:
             self.watcher().clear()
         self.graphic.remove()
 
-class ConnectionGraphic(Frame):
-    def __init__(self, con, canvas, startpos, endpos):
-        self._c = con #create a circular reference so we don't get garbage collected
+class Graphic(Frame):
+    def __init__(self, item, canvas):
+        super().__init__(master=canvas, width=0, height=0)
+        self._item = item #create a circular reference so unit objects are not deleted
         self.canvas = canvas
-        self.ids = {'value': self.canvas.create_line(*startpos, *endpos, fill='black', width=5, stipple='gray25')}
-        for part in self.ids:
-            self.canvas.tag_bind(self.ids[part], "<Button-1>", self.canvas.master.configconnection(weakref.ref(con)))
-    def recolor(self, what, value, minval=None, maxval=None):
-        self.canvas.itemconfig(self.ids[what], fill=tocolor(value, minval, maxval))
+        self.ids = {}
     def remove(self):
         for part in self.ids:
             self.canvas.delete(self.ids[part])
-        del self._c #remove circular reference, so we can be garbage collected
+        del self._item
+    def recolor(self, what, value, minval=None, maxval=None):
+        self.canvas.itemconfig(self.ids[what], fill=tocolor(value, minval, maxval))
+
+class ConnectionGraphic(Graphic):
+    def __init__(self, con, canvas, startpos, endpos):
+        super().__init__(con, canvas)
+        self.ids = {'value': self.canvas.create_line(*startpos, *endpos, fill='black', width=5, stipple='gray25')}
+        for part in self.ids:
+            self.canvas.tag_bind(self.ids[part], "<Button-1>", self.canvas.master.configconnection(weakref.ref(con)))
 
 class GConnection(Connection, Watchable):
     def __init__(self, canvas, startunit, endunit, *args, **kwargs):
@@ -134,20 +140,18 @@ class GConnection(Connection, Watchable):
         self.startunit.remove_outgoing_weight(self)
         self.remove()
 
-class UnitGraphic(Frame):
+class UnitGraphic(Graphic):
     bigsize = 20
     smallsize = 10
     def __init__(self, unit, canvas, position):
-        self._u = unit #create a circular reference so unit objects are not deleted
+        super().__init__(unit, canvas)
         self.unit = weakref.ref(unit)
-        self.canvas = canvas
         self.positions = {}
         self.find_bounds(position)
         self.gen_graphic()
         self.canvas.addtag_withtag('unit', self.ids['_derivative'])
         for piece in self.ids:
             self.canvas.tag_bind(self.ids[piece], "<Button-1>", self.canvas.master.addconnection(self.unit))
-        super().__init__(master=canvas, width=0, height=0)
         self.checktags()
     def find_bounds(self, mainposition):
         mp = mainposition
@@ -186,8 +190,6 @@ class UnitGraphic(Frame):
         self.find_bounds(newposition)
         for key, item in self.ids.items():
             self.canvas.coords(item, *self.positions[key])
-    def recolor(self, what, value, minval=None, maxval=None):
-        self.canvas.itemconfig(self.ids[what], fill=tocolor(value, minval, maxval))
     def checktags(self):
         tags = self.canvas.itemcget(self.ids['_derivative'], 'tags')
         if 'forward' in tags and 'forward_done' not in tags:
@@ -204,10 +206,6 @@ class UnitGraphic(Frame):
         self.after(20, self.checktags)
     def cleartags(self):
         self.canvas.itemconfig(self.ids['_derivative'], tags='unit')
-    def remove(self):
-        for part in self.ids:
-            self.canvas.delete(self.ids[part])
-        del self._u #remove final reference to this object in the program
 
 class GUnit(Unit, Watchable):
     def __init__(self, canvas, position, *args, **kwargs):
