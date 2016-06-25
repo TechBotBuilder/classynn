@@ -68,6 +68,7 @@ class Watchable:
             if name in ('nonlinearity', 'nonlinearity_deriv'):
                 if self.watcher().parts[name].get() != value.__name__:
                     self.watcher().parts[name].set(value.__name__)
+                    self.watcher().recalc_bounds()
             else:
                 if self.watcher().parts[name].get() != value: #if it doesn't already know what's happening
                     self.watcher().parts[name].set(value) #let the watcher know what's happening
@@ -319,6 +320,7 @@ class Watcher:
         for part in self.parts:
             if part in ('target', 'cost_val') and not isinstance(self.watched_item, OutputUnit): continue
             self.parts[part].set(take_care_of_lists(self.watched_item.__getattribute__(part)))#load in this item's settings/values
+        self.recalc_bounds()
     def update_display(self, name):
         def f(*args):
             if len(args) == 0:
@@ -333,8 +335,10 @@ class Watcher:
     def _update_display(self, name, value):
         if self.watched_item:
             if name == 'nonlinearity':
-                setattr(self.watched_item, name, nl.possible_nonlinearities[value][0])
-                setattr(self.watched_item, 'nonlinearity_deriv', nl.possible_nonlinearities[value][1])
+                new_nonlin = nl.possible_nonlinearities[value]
+                setattr(self.watched_item, name, new_nonlin[0])
+                setattr(self.watched_item, 'nonlinearity_deriv', new_nonlin[1])
+                self.recalc_bounds()
             else: setattr(self.watched_item, name, float(value))
     def clear(self):
         if self.watched_item:
@@ -402,6 +406,14 @@ class UnitConfigFrame(Frame, Watcher):
         self.parts['target'].grid(column=4, row=0)
         self.parts['cost_val'].grid(column=4, row=1)
         self.deletebutton.grid(column=4, row=2)
+    def recalc_bounds(self):
+        new_nonlin = nl.possible_nonlinearities[self.parts['nonlinearity'].get()]
+        low = new_nonlin[2]
+        if low==None: low = -MAXVAL
+        high = new_nonlin[3]
+        if high==None: high = MAXVAL
+        self.parts['output'].config(from_=low, to=high)
+        self.parts['target'].config(from_=low, to=high)
 
 class ConnectionConfigFrame(Frame, Watcher):
     def __init__(self, master):

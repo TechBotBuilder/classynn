@@ -15,9 +15,10 @@ def dlinear(y): return 1
 def rectified_linear(x): return max(0, x)
 def drectified_linear(y): return int(y != 0)
 
+#store in format name: (function, dfunction, minfunctionoutput, maxfunctionoutput)
 possible_nonlinearities = {
-    'sigmoid': (sigmoid, dsigmoid),
-    'tanh': (tanh, dtanh),
-    'linear': (linear, dlinear),
-    'rectified_linear': (rectified_linear, drectified_linear)
+    'sigmoid': (sigmoid, dsigmoid, 0, 1),
+    'tanh': (tanh, dtanh, -1, 1),
+    'linear': (linear, dlinear, None, None),
+    'rectified_linear': (rectified_linear, drectified_linear, 0, None)
     }

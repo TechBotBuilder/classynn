@@ -224,7 +224,7 @@ class Group:
 
 class InputUnit(Unit):
     def __init__(self, outputs=[], *args, **kwargs):
-        super().__init__(outputs, *nonlins['linear'], *args, **kwargs)
+        super().__init__(outputs, nonlins['linear'][0], nonlins['linear'][1], *args, **kwargs)
     def update(self, value):
         self.logit = value
 
